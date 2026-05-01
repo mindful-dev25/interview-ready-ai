@@ -4,7 +4,11 @@ from app.config import settings
 class LocalLLMClient:
     """Placeholder adapter for Ollama-backed local model calls."""
 
-    def __init__(self, base_url: str = settings.ollama_base_url, model: str = settings.ollama_model) -> None:
+    def __init__(
+        self,
+        base_url: str = settings.ollama_base_url,
+        model: str = settings.ollama_chat_model,
+    ) -> None:
         self.base_url = base_url
         self.model = model
 

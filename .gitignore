@@ -43,8 +43,12 @@ build/
 # FastAPI/backend local data
 backend/.chroma/
 backend/.sessions/
+backend/chroma_db/
+backend/sessions/
 backend/uploads/
 backend/logs/
+chroma_db/
+sessions/
 
 # Node/Next.js
 node_modules/
