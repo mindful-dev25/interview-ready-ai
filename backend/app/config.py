@@ -13,9 +13,9 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
-    ollama_base_url: str = "http://localhost:11434"
-    ollama_chat_model: str = "llama3.1"
-    ollama_embed_model: str = "nomic-embed-text"
+    groq_api_key: str = ""
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+    groq_chat_model: str = ""
 
     chroma_persist_dir: str = "./chroma_db"
     session_store_path: str = "./sessions"

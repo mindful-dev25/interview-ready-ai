@@ -1,12 +1,12 @@
 # Interview Ready AI
 
-Interview Ready AI is a local-LLM, agentic RAG application for interview preparation. Users upload a resume and provide a job description URL, then the app drafts tailored interview answers with guardrails, evidence, and human-in-the-loop review before a final report is generated.
+Interview Ready AI is a Groq-backed, agentic RAG application for interview preparation. Users upload a resume and provide a job description URL, then the app drafts tailored interview answers with guardrails, evidence, and human-in-the-loop review before a final report is generated.
 
 ## Tech Stack
 
 - Backend: Python, FastAPI
 - Agent orchestration: LangGraph
-- Local LLM: Ollama
+- LLM provider: Groq via OpenAI-compatible HTTP calls
 - Vector DB: Chroma
 - Frontend: Next.js, React, TypeScript
 - Styling: Tailwind CSS
@@ -34,6 +34,8 @@ uvicorn app.main:app --reload
 
 The backend runs at `http://localhost:8000` by default.
 
+Set `GROQ_API_KEY` and `GROQ_CHAT_MODEL` in `backend/.env` before using LLM generation. The backend uses Groq's OpenAI-compatible API at `https://api.groq.com/openai/v1` by default and does not require Ollama to be installed.
+
 ### Frontend
 
 ```bash
@@ -44,16 +46,6 @@ npm run dev
 ```
 
 The frontend runs at `http://localhost:3000` by default.
-
-### Local LLM
-
-Install and run Ollama, then pull a local model:
-
-```bash
-ollama pull llama3.1
-```
-
-Update `backend/.env` if you want to use a different local model.
 
 ## Status
 

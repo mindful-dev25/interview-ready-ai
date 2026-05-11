@@ -1,6 +1,6 @@
 # Interview Ready AI Backend
 
-FastAPI backend for the Interview Ready AI local-LLM interview preparation workflow.
+FastAPI backend for the Interview Ready AI Groq-backed interview preparation workflow.
 
 ## Setup
 
@@ -17,6 +17,6 @@ uvicorn app.main:app --reload
 - Exposes a health check endpoint.
 - Provides a placeholder analysis endpoint.
 - Defines service boundaries for resume parsing, job scraping, company research, RAG, guardrails, and report generation.
-- Defines placeholders for LangGraph orchestration, Ollama access, Chroma storage, and session storage.
+- Defines placeholders for LangGraph orchestration, Groq-backed LLM access, Chroma storage, and session storage.
 
 Full implementation is intentionally deferred.
