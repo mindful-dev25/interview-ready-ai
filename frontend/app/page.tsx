@@ -12,14 +12,6 @@ import ResumeUpload from "@/components/ResumeUpload";
 import { reviewAnswer, requestRevision, startAnalysis, fetchFinalReport } from "@/lib/api";
 import type { AnalysisStatus, EvidenceItem, InterviewAnswer } from "@/lib/types";
 
-const statusLabel: Record<AnalysisStatus, string> = {
-  queued: "Queued",
-  running: "Running",
-  needs_review: "Needs review",
-  complete: "Complete",
-  failed: "Failed",
-};
-
 const badgeTone: Record<string, "neutral" | "success" | "warning"> = {
   pending: "warning",
   needs_revision: "warning",
@@ -225,7 +217,7 @@ export default function Home() {
           <JobUrlInput jobUrl={jobUrl} onJobUrlChange={setJobUrl} onSubmit={onAnalyze} isLoading={loading} />
         </section>
 
-        <AnalysisProgress status={statusLabel[analysisStatus]} />
+        <AnalysisProgress status={analysisStatus} />
 
         <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-4">
@@ -294,6 +286,9 @@ export default function Home() {
                           value={revisionNotes}
                           onChange={(e) => setRevisionNotes(e.target.value)}
                         />
+                        {reviewError && revisingAnswerId === answer.id && (
+                          <p className="mt-1 text-sm text-red-700">{reviewError}</p>
+                        )}
                         <button
                           type="button"
                           disabled={revisionLoading}

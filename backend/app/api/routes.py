@@ -45,19 +45,107 @@ def _build_analysis_state(session_id: str, request: AnalysisRequest) -> SessionS
     questions = [
         InterviewQuestion(
             id="q1",
-            question="Tell me about a time you solved a hard technical problem.",
-            category="behavioral",
-            difficulty="medium",
-            rationale="Evaluates problem-solving and communication skills.",
-            related_requirements=["problem solving", "technical ownership"],
+            question="Tell me about yourself.",
+            category="introduction",
+            difficulty="easy",
+            rationale="Opens the interview and sets the tone; tests communication and self-awareness.",
+            related_requirements=["communication", "self-awareness"],
         ),
         InterviewQuestion(
             id="q2",
+            question="Why are you interested in this role?",
+            category="motivation",
+            difficulty="easy",
+            rationale="Reveals alignment between the candidate's goals and the role.",
+            related_requirements=["motivation", "role fit"],
+        ),
+        InterviewQuestion(
+            id="q3",
+            question="Tell me about a time you solved a hard technical problem.",
+            category="behavioral",
+            difficulty="medium",
+            rationale="Evaluates problem-solving depth and communication of technical work.",
+            related_requirements=["problem solving", "technical ownership"],
+        ),
+        InterviewQuestion(
+            id="q4",
             question="How would you prioritize competing deadlines on this role?",
             category="strategy",
             difficulty="medium",
-            rationale="Assesses planning and time management.",
+            rationale="Assesses planning, time management, and stakeholder communication.",
             related_requirements=["project management", "focus"],
+        ),
+        InterviewQuestion(
+            id="q5",
+            question="Describe a project you're most proud of and your specific contribution.",
+            category="behavioral",
+            difficulty="medium",
+            rationale="Surfaces ownership, impact, and the candidate's sense of quality.",
+            related_requirements=["ownership", "impact", "engineering quality"],
+        ),
+        InterviewQuestion(
+            id="q6",
+            question="Tell me about a time you disagreed with a teammate or manager. How did you handle it?",
+            category="behavioral",
+            difficulty="medium",
+            rationale="Tests interpersonal skills, professional maturity, and conflict resolution.",
+            related_requirements=["collaboration", "communication", "maturity"],
+        ),
+        InterviewQuestion(
+            id="q7",
+            question="How do you approach learning a new technology or codebase quickly?",
+            category="growth",
+            difficulty="easy",
+            rationale="Signals learning agility and resourcefulness, important in fast-moving teams.",
+            related_requirements=["learning agility", "adaptability"],
+        ),
+        InterviewQuestion(
+            id="q8",
+            question="Describe a situation where you had to deliver under tight constraints. What trade-offs did you make?",
+            category="behavioral",
+            difficulty="hard",
+            rationale="Probes judgment under pressure and ability to reason about trade-offs explicitly.",
+            related_requirements=["decision making", "delivery", "pragmatism"],
+        ),
+        InterviewQuestion(
+            id="q9",
+            question="What does good code quality mean to you, and how do you maintain it day to day?",
+            category="technical",
+            difficulty="medium",
+            rationale="Reveals engineering standards and whether the candidate can articulate quality practices.",
+            related_requirements=["engineering quality", "code review", "testing"],
+        ),
+        InterviewQuestion(
+            id="q10",
+            question="Tell me about a time a project didn't go as planned. What happened and what did you learn?",
+            category="behavioral",
+            difficulty="medium",
+            rationale="Tests resilience, honesty, and the ability to extract lessons from failure.",
+            related_requirements=["resilience", "accountability", "growth mindset"],
+        ),
+        InterviewQuestion(
+            id="q11",
+            question="How do you collaborate with non-technical stakeholders to define requirements?",
+            category="collaboration",
+            difficulty="medium",
+            rationale="Evaluates cross-functional communication and ability to translate between technical and business perspectives.",
+            related_requirements=["communication", "product sense", "collaboration"],
+        ),
+        InterviewQuestion(
+            id="q12",
+            question="Where do you see yourself in three years, and how does this role fit into that path?",
+            category="motivation",
+            difficulty="easy",
+            rationale="Gauges ambition, self-awareness, and whether the candidate's trajectory aligns with the team.",
+            related_requirements=["career growth", "role fit"],
+        ),
+        InterviewQuestion(
+            id="q13",
+            question="What questions do you have for us?",
+            category="candidate_questions",
+            difficulty="easy",
+            rationale="Reveals curiosity, preparation, and what the candidate values in a role and team.",
+            related_requirements=["curiosity", "preparation"],
         ),
     ]
 
@@ -65,6 +153,31 @@ def _build_analysis_state(session_id: str, request: AnalysisRequest) -> SessionS
         InterviewAnswer(
             id="a1",
             question=questions[0],
+            draft_answer=(
+                "I'm a software engineer with several years of experience building backend services and APIs. "
+                "I enjoy working on problems that sit at the intersection of engineering and product — "
+                "where clean architecture and user impact both matter. "
+                "Most recently I've been focused on AI-enabled tools, and I'm drawn to roles where I can ship "
+                "things that users rely on daily."
+            ),
+            evidence_used=[],
+            human_status=HumanReviewStatus.pending,
+        ),
+        InterviewAnswer(
+            id="a2",
+            question=questions[1],
+            draft_answer=(
+                "I'm excited about this role because it combines the technical challenges I enjoy — "
+                "scalable APIs, LLM integration, and reliable data pipelines — with a product that solves "
+                "a real problem. I've been following the space closely, and I believe this team is approaching "
+                "the problem in a thoughtful way that I'd like to be part of."
+            ),
+            evidence_used=[],
+            human_status=HumanReviewStatus.pending,
+        ),
+        InterviewAnswer(
+            id="a3",
+            question=questions[2],
             draft_answer=(
                 "I solved a hard technical problem by breaking it into smaller pieces, "
                 "validating each part, and collaborating with stakeholders to ensure alignment. "
@@ -74,11 +187,121 @@ def _build_analysis_state(session_id: str, request: AnalysisRequest) -> SessionS
             human_status=HumanReviewStatus.pending,
         ),
         InterviewAnswer(
-            id="a2",
-            question=questions[1],
+            id="a4",
+            question=questions[3],
             draft_answer=(
                 "I prioritize work by impact and urgency, mapping deadlines against business goals. "
-                "I communicate tradeoffs early and adjust as needed when new information arrives."
+                "I communicate trade-offs early and adjust as needed when new information arrives."
+            ),
+            evidence_used=[],
+            human_status=HumanReviewStatus.pending,
+        ),
+        InterviewAnswer(
+            id="a5",
+            question=questions[4],
+            draft_answer=(
+                "One project I'm most proud of is a real-time data pipeline I led from design to production. "
+                "My specific contribution was the schema evolution strategy that allowed us to deploy "
+                "breaking changes without downtime. It became the standard approach the team reused across "
+                "three subsequent services."
+            ),
+            evidence_used=[],
+            human_status=HumanReviewStatus.pending,
+        ),
+        InterviewAnswer(
+            id="a6",
+            question=questions[5],
+            draft_answer=(
+                "I once disagreed with my manager about releasing a feature before proper load testing. "
+                "Rather than escalating, I prepared a short risk summary with concrete numbers and requested "
+                "a 30-minute discussion. We agreed on a limited rollout to 5% of users first. "
+                "That turned out to be the right call — we caught a cache invalidation bug before it hit everyone."
+            ),
+            evidence_used=[],
+            human_status=HumanReviewStatus.pending,
+        ),
+        InterviewAnswer(
+            id="a7",
+            question=questions[6],
+            draft_answer=(
+                "I start by reading the official docs and running the quickstart to build a mental model. "
+                "Then I look at existing production usage in the codebase to understand the team's conventions. "
+                "I ask specific questions when I'm stuck rather than spending too long in isolation, "
+                "and I write a short internal note summarizing what I learned so others benefit too."
+            ),
+            evidence_used=[],
+            human_status=HumanReviewStatus.pending,
+        ),
+        InterviewAnswer(
+            id="a8",
+            question=questions[7],
+            draft_answer=(
+                "During a hard deadline, I had to choose between full test coverage and shipping on time. "
+                "I covered the critical paths with integration tests and filed explicit tech-debt tickets for "
+                "the rest, with acceptance criteria already written. I communicated the risk to the team "
+                "before merging so no one was surprised later."
+            ),
+            evidence_used=[],
+            human_status=HumanReviewStatus.pending,
+        ),
+        InterviewAnswer(
+            id="a9",
+            question=questions[8],
+            draft_answer=(
+                "Good code quality means the next engineer can understand, change, and test it confidently. "
+                "Day to day I maintain that by writing tests before I consider something done, "
+                "keeping PRs small and focused, and giving code reviews that explain the 'why' not just the 'what'. "
+                "I also treat linter and type-checker warnings as errors, not suggestions."
+            ),
+            evidence_used=[],
+            human_status=HumanReviewStatus.pending,
+        ),
+        InterviewAnswer(
+            id="a10",
+            question=questions[9],
+            draft_answer=(
+                "A migration project I led ran two weeks over because I underestimated the complexity of "
+                "the legacy data model. The lesson was to timebox exploration spikes before committing to an estimate. "
+                "Since then I always include a discovery phase in my project plans and flag uncertainty ranges "
+                "explicitly rather than giving a single number."
+            ),
+            evidence_used=[],
+            human_status=HumanReviewStatus.pending,
+        ),
+        InterviewAnswer(
+            id="a11",
+            question=questions[10],
+            draft_answer=(
+                "I schedule short discovery sessions with stakeholders before writing any code, "
+                "focusing on the outcome they need rather than the feature they're describing. "
+                "I use lightweight artifacts like user story maps or acceptance criteria tables "
+                "to validate shared understanding, and I check in at a mid-point so surprises surface "
+                "early rather than at delivery."
+            ),
+            evidence_used=[],
+            human_status=HumanReviewStatus.pending,
+        ),
+        InterviewAnswer(
+            id="a12",
+            question=questions[11],
+            draft_answer=(
+                "In three years I'd like to be a strong technical lead — someone who can scope large "
+                "projects, mentor junior engineers, and contribute to architectural decisions. "
+                "This role fits that path because it gives me the scope to own meaningful systems "
+                "and work closely with a senior team I can learn from."
+            ),
+            evidence_used=[],
+            human_status=HumanReviewStatus.pending,
+        ),
+        InterviewAnswer(
+            id="a13",
+            question=questions[12],
+            draft_answer=(
+                "A few questions I'd love to explore: "
+                "What does the onboarding experience look like for the first 90 days? "
+                "How does the team balance feature work with technical debt? "
+                "What does success look like for this role in the first six months? "
+                "And what's the biggest challenge the team is working through right now?"
             ),
             evidence_used=[],
             human_status=HumanReviewStatus.pending,
