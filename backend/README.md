@@ -12,6 +12,13 @@ cp .env.example .env
 uvicorn app.main:app --reload
 ```
 
+## Testing
+
+```bash
+cd backend
+pytest
+```
+
 ## Current Scope
 
 - Exposes a health check endpoint.

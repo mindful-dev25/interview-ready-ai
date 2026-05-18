@@ -34,7 +34,9 @@ uvicorn app.main:app --reload
 
 The backend runs at `http://localhost:8000` by default.
 
-Set `GROQ_API_KEY` and `GROQ_CHAT_MODEL` in `backend/.env` before using LLM generation. The backend uses Groq's OpenAI-compatible API at `https://api.groq.com/openai/v1` by default and does not require Ollama to be installed.
+Set `GROQ_API_KEY` and `GROQ_CHAT_MODEL` in `backend/.env` before using LLM generation. The backend uses Groq's OpenAI-compatible API at `https://api.groq.com/openai/v1` by default.
+
+Note: Chroma vector retrieval and session persistence are local, file-based services. LLM generation uses Groq, not Ollama.
 
 ### Frontend
 
