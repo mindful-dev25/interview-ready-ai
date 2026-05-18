@@ -1,6 +1,13 @@
 import { FileText } from "lucide-react";
 
-export default function FinalReport() {
+type FinalReportProps = {
+  markdown?: string;
+  isLoading: boolean;
+  ready: boolean;
+  error?: string | null;
+};
+
+export default function FinalReport({ markdown, isLoading, ready, error }: FinalReportProps) {
   return (
     <section className="rounded-lg border border-border bg-white p-5 shadow-sm">
       <div className="flex items-center gap-3">
@@ -9,11 +16,18 @@ export default function FinalReport() {
         </div>
         <div>
           <h2 className="text-lg font-semibold">Final Report</h2>
-          <p className="text-sm text-muted-foreground">TODO: Render approved answers, evidence, and coaching notes.</p>
+          <p className="text-sm text-muted-foreground">Preview the generated final report after all answers are reviewed.</p>
         </div>
       </div>
+
       <div className="mt-5 rounded-md border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
-        Final report preview will appear here after human review.
+        {isLoading
+          ? "Generating report..."
+          : error
+          ? error
+          : ready
+          ? markdown || "No report content is available."
+          : "Final report will appear here once all answers are approved or edited."}
       </div>
     </section>
   );

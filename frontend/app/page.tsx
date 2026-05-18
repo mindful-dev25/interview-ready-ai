@@ -1,3 +1,6 @@
+'use client';
+
+import { useMemo, useState } from "react";
 import AnalysisProgress from "@/components/AnalysisProgress";
 import EvidencePanel from "@/components/EvidencePanel";
 import FinalReport from "@/components/FinalReport";
@@ -6,21 +9,170 @@ import HumanReviewControls from "@/components/HumanReviewControls";
 import InterviewQuestionCard from "@/components/InterviewQuestionCard";
 import JobUrlInput from "@/components/JobUrlInput";
 import ResumeUpload from "@/components/ResumeUpload";
+import { reviewAnswer, startAnalysis, fetchFinalReport } from "@/lib/api";
+import type { AnalysisStatus, EvidenceItem, InterviewAnswer } from "@/lib/types";
 
-const sampleEvidence = [
-  {
-    source: "Resume",
-    quote: "Led cross-functional AI prototype delivery.",
-    relevance: "Supports leadership and delivery examples.",
-  },
-  {
-    source: "Job Description",
-    quote: "Experience with RAG systems and production APIs.",
-    relevance: "Maps directly to target role requirements.",
-  },
-];
+const statusLabel: Record<AnalysisStatus, string> = {
+  queued: "Queued",
+  running: "Running",
+  needs_review: "Needs review",
+  complete: "Complete",
+  failed: "Failed",
+};
+
+const badgeTone: Record<string, "neutral" | "success" | "warning"> = {
+  pending: "warning",
+  needs_revision: "warning",
+  approved: "success",
+  edited: "success",
+};
 
 export default function Home() {
+  const [jobUrl, setJobUrl] = useState("");
+  const [resumeText, setResumeText] = useState("");
+  const [resumeFileName, setResumeFileName] = useState<string | undefined>(undefined);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [analysisStatus, setAnalysisStatus] = useState<AnalysisStatus>("queued");
+  const [message, setMessage] = useState<string>("Enter a job URL and resume text to start the workflow.");
+  const [answers, setAnswers] = useState<InterviewAnswer[]>([]);
+  const [selectedAnswerId, setSelectedAnswerId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportMarkdown, setReportMarkdown] = useState<string | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+
+  const selectedAnswer = useMemo(
+    () => answers.find((answer) => answer.id === selectedAnswerId) ?? answers[0] ?? null,
+    [answers, selectedAnswerId],
+  );
+
+  const evidenceItems = useMemo(() => {
+    const seen = new Set<string>();
+    const items: EvidenceItem[] = [];
+    answers.forEach((answer) => {
+      answer.evidence_used?.forEach((item) => {
+        const key = `${item.id ?? item.quote}-${item.source ?? item.source_type}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          items.push({
+            id: item.id,
+            source: item.source ?? item.source_type ?? "Evidence",
+            quote: item.quote,
+            relevance: item.relevance ?? "",
+          });
+        }
+      });
+    });
+    return items;
+  }, [answers]);
+
+  const reportReady = answers.length > 0 && answers.every((answer) => answer.human_status === "approved" || answer.human_status === "edited");
+
+  const reviewCounts = useMemo(() => {
+    const counts = { pending: 0, approved: 0, edited: 0, needs_revision: 0 };
+    answers.forEach((answer) => {
+      const status = answer.human_status ?? "pending";
+      counts[status as keyof typeof counts] += 1;
+    });
+    return counts;
+  }, [answers]);
+
+  async function onAnalyze() {
+    if (!jobUrl.trim()) {
+      setMessage("Please enter a job URL before starting analysis.");
+      return;
+    }
+
+    setLoading(true);
+    setReportMarkdown(null);
+    setReportError(null);
+    setReviewError(null);
+    setMessage("Generating draft answers from the provided job URL and resume context...");
+
+    try {
+      const response = await startAnalysis(jobUrl.trim(), resumeText.trim() || undefined);
+      setSessionId(response.sessionId);
+      setAnalysisStatus(response.status);
+      setMessage(response.message || "Draft answers are ready.");
+      setAnswers(response.answers ?? []);
+      setSelectedAnswerId(response.answers?.[0]?.id ?? null);
+    } catch (error: unknown) {
+      setMessage("Failed to start the workflow. Please check your inputs and try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleReviewAction(answerId: string, action: "approve" | "edit" | "request_revision", editedAnswer?: string) {
+    if (!sessionId) {
+      setReviewError("Session is not available for review actions.");
+      return;
+    }
+
+    setReviewError(null);
+    try {
+      const result = await reviewAnswer(sessionId, answerId, action, editedAnswer);
+      if (result.answer) {
+        setAnswers((current) => current.map((answer) => (answer.id === result.answer?.id ? result.answer : answer)));
+        setSelectedAnswerId(result.answer.id);
+      }
+      setAnalysisStatus((prev) => (reviewCounts.pending - 1 <= 0 ? "complete" : prev));
+    } catch (error: unknown) {
+      setReviewError(error instanceof Error ? error.message : "Unable to update review status.");
+    }
+  }
+
+  async function onGenerateReport() {
+    if (!sessionId) {
+      setReportError("A completed session is required to generate the final report.");
+      return;
+    }
+
+    setReportLoading(true);
+    setReportError(null);
+
+    try {
+      const report = await fetchFinalReport(sessionId);
+      setReportMarkdown(report.report_markdown);
+      setAnalysisStatus(report.status);
+      setMessage(report.message);
+    } catch (error: unknown) {
+      setReportError(error instanceof Error ? error.message : "Failed to load the final report.");
+    } finally {
+      setReportLoading(false);
+    }
+  }
+
+  function handleFileChange(file: File | null) {
+    setFileError(null);
+    setResumeFileName(file?.name);
+    if (!file) {
+      return;
+    }
+
+    const allowed = ["text/plain", "text/markdown"];
+    if (!allowed.includes(file.type) && !file.name.match(/\.(txt|md)$/i)) {
+      setFileError("Only plain text or markdown resume files are supported in the MVP.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = typeof reader.result === "string" ? reader.result : "";
+      setResumeText(text);
+    };
+    reader.onerror = () => {
+      setFileError("Unable to read the uploaded file.");
+    };
+    reader.readAsText(file);
+  }
+
+  function renderAnswerText(answer: InterviewAnswer) {
+    return answer.final_answer?.trim() ? answer.final_answer : answer.draft_answer;
+  }
+
   return (
     <main className="min-h-screen px-6 py-8 md:px-10">
       <div className="mx-auto flex max-w-6xl flex-col gap-8">
@@ -30,29 +182,104 @@ export default function Home() {
             Interview Ready AI
           </h1>
           <p className="max-w-2xl text-base leading-7 text-muted-foreground">
-            Upload resume context, add a job URL, review grounded answer drafts, and keep humans in control before the final report.
+            Upload resume context, enter a job URL, review generated answers, and create a final report in one page.
           </p>
         </header>
 
         <section className="grid gap-4 md:grid-cols-[1fr_1fr]">
-          <ResumeUpload />
-          <JobUrlInput />
+          <ResumeUpload
+            resumeText={resumeText}
+            fileName={resumeFileName}
+            onTextChange={setResumeText}
+            onFileChange={handleFileChange}
+            fileError={fileError}
+          />
+          <JobUrlInput jobUrl={jobUrl} onJobUrlChange={setJobUrl} onSubmit={onAnalyze} isLoading={loading} />
         </section>
 
-        <AnalysisProgress status="Queued" />
+        <AnalysisProgress status={statusLabel[analysisStatus]} />
 
         <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-          <InterviewQuestionCard
-            question="Tell me about a project where you used AI to solve a practical problem."
-            answer="TODO: Generate a tailored, evidence-backed answer after the agent workflow is implemented."
-          >
-            <GuardrailBadge label="Needs evidence review" tone="warning" />
-          </InterviewQuestionCard>
-          <EvidencePanel items={sampleEvidence} />
+          <div className="space-y-4">
+            {answers.length === 0 ? (
+              <div className="rounded-lg border border-border bg-white p-5 shadow-sm">
+                <p className="text-sm text-muted-foreground">No answer drafts yet. Start analysis to generate questions and answer drafts.</p>
+              </div>
+            ) : (
+              answers.map((answer) => (
+                <InterviewQuestionCard
+                  key={answer.id}
+                  question={answer.question.question}
+                  answer={renderAnswerText(answer)}
+                >
+                  <div className="flex flex-col items-end gap-2">
+                    <GuardrailBadge
+                      label={
+                        answer.human_status === "approved"
+                          ? "Approved"
+                          : answer.human_status === "edited"
+                          ? "Edited"
+                          : answer.human_status === "needs_revision"
+                          ? "Needs revision"
+                          : "Needs review"
+                      }
+                      tone={badgeTone[answer.human_status ?? "pending"]}
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleReviewAction(answer.id, "approve")}
+                        className="rounded-md border border-border bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleReviewAction(answer.id, "request_revision")}
+                        className="rounded-md border border-border bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800"
+                      >
+                        Request revision
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const edited = prompt("Edit final answer:", renderAnswerText(answer));
+                          if (edited !== null) {
+                            handleReviewAction(answer.id, "edit", edited);
+                          }
+                        }}
+                        className="rounded-md border border-border bg-slate-50 px-3 py-2 text-sm font-medium text-foreground"
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  </div>
+                </InterviewQuestionCard>
+              ))
+            )}
+          </div>
+
+          <aside className="space-y-4">
+            <EvidencePanel items={evidenceItems} />
+            <HumanReviewControls
+              pendingCount={reviewCounts.pending}
+              approvedCount={reviewCounts.approved}
+              editedCount={reviewCounts.edited}
+              needsRevisionCount={reviewCounts.needs_revision}
+              onGenerateReport={onGenerateReport}
+              reportReady={reportReady}
+              reportLoading={reportLoading}
+            />
+            <FinalReport markdown={reportMarkdown ?? undefined} isLoading={reportLoading} ready={reportReady && Boolean(reportMarkdown)} error={reportError} />
+          </aside>
         </section>
 
-        <HumanReviewControls />
-        <FinalReport />
+        {reviewError ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{reviewError}</div>
+        ) : null}
+        <div className="rounded-lg border border-border bg-white p-5 text-sm text-muted-foreground">
+          {message}
+        </div>
       </div>
     </main>
   );
