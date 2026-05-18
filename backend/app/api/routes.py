@@ -18,14 +18,18 @@ from app.schemas import (
     ReviewAction,
     ReviewActionRequest,
     ReviewActionResponse,
+    RevisionRequest,
+    RevisionResponse,
     SessionState,
 )
+from app.services.answer_reviser import AnswerReviser
 from app.services.report_generator import ReportGenerator
 from app.storage.session_store import SessionStore
 
 router = APIRouter()
 session_store = SessionStore()
 report_generator = ReportGenerator()
+answer_reviser = AnswerReviser()
 
 
 def _session_status_from_answers(answers: list[InterviewAnswer]) -> AnalysisStatus:
@@ -203,6 +207,49 @@ async def review_answer(request: ReviewActionRequest) -> ReviewActionResponse:
         answer_id=answer.id,
         human_status=answer.human_status,
         message=message,
+        answer=answer,
+    )
+
+
+@router.post("/revision", response_model=RevisionResponse)
+async def revise_answer(request: RevisionRequest) -> RevisionResponse:
+    state = await session_store.load(request.session_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail="Analysis session not found.")
+
+    session = SessionState.model_validate(state)
+    answer = next((item for item in session.answers if item.id == request.answer_id), None)
+    if answer is None:
+        raise HTTPException(status_code=404, detail="Answer not found for the requested session.")
+
+    if not request.reviewer_notes.strip():
+        raise HTTPException(status_code=400, detail="reviewer_notes is required to request a revision.")
+
+    try:
+        revised_text = await answer_reviser.revise(answer, request.reviewer_notes)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"LLM revision failed: {exc}") from exc
+
+    answer.draft_answer = revised_text
+    answer.human_status = HumanReviewStatus.pending
+    answer.reviewer_notes.append(request.reviewer_notes)
+
+    updated_status = _session_status_from_answers(session.answers)
+    session.status = updated_status
+
+    await session_store.update(
+        request.session_id,
+        {
+            "answers": session.answers,
+            "status": session.status,
+        },
+    )
+
+    return RevisionResponse(
+        session_id=request.session_id,
+        answer_id=answer.id,
+        human_status=answer.human_status,
+        message="Answer revised by AI. Please review the updated draft.",
         answer=answer,
     )
 

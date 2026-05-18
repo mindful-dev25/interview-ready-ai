@@ -9,7 +9,7 @@ import HumanReviewControls from "@/components/HumanReviewControls";
 import InterviewQuestionCard from "@/components/InterviewQuestionCard";
 import JobUrlInput from "@/components/JobUrlInput";
 import ResumeUpload from "@/components/ResumeUpload";
-import { reviewAnswer, startAnalysis, fetchFinalReport } from "@/lib/api";
+import { reviewAnswer, requestRevision, startAnalysis, fetchFinalReport } from "@/lib/api";
 import type { AnalysisStatus, EvidenceItem, InterviewAnswer } from "@/lib/types";
 
 const statusLabel: Record<AnalysisStatus, string> = {
@@ -42,6 +42,9 @@ export default function Home() {
   const [reportMarkdown, setReportMarkdown] = useState<string | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [revisingAnswerId, setRevisingAnswerId] = useState<string | null>(null);
+  const [revisionNotes, setRevisionNotes] = useState("");
+  const [revisionLoading, setRevisionLoading] = useState(false);
 
   const selectedAnswer = useMemo(
     () => answers.find((answer) => answer.id === selectedAnswerId) ?? answers[0] ?? null,
@@ -121,6 +124,31 @@ export default function Home() {
       setAnalysisStatus((prev) => (reviewCounts.pending - 1 <= 0 ? "complete" : prev));
     } catch (error: unknown) {
       setReviewError(error instanceof Error ? error.message : "Unable to update review status.");
+    }
+  }
+
+  async function handleRevisionSubmit(answerId: string) {
+    if (!sessionId) {
+      setReviewError("Session is not available for revision.");
+      return;
+    }
+    if (!revisionNotes.trim()) {
+      setReviewError("Please enter revision notes before submitting.");
+      return;
+    }
+
+    setRevisionLoading(true);
+    setReviewError(null);
+    try {
+      const result = await requestRevision(sessionId, answerId, revisionNotes);
+      setAnswers((current) => current.map((a) => (a.id === result.answer.id ? result.answer : a)));
+      setSelectedAnswerId(result.answer.id);
+    } catch (error: unknown) {
+      setReviewError(error instanceof Error ? error.message : "Revision failed.");
+    } finally {
+      setRevisionLoading(false);
+      setRevisingAnswerId(null);
+      setRevisionNotes("");
     }
   }
 
@@ -212,7 +240,7 @@ export default function Home() {
                   question={answer.question.question}
                   answer={renderAnswerText(answer)}
                 >
-                  <div className="flex flex-col items-end gap-2">
+                  <div className="flex flex-col items-end gap-2 w-full">
                     <GuardrailBadge
                       label={
                         answer.human_status === "approved"
@@ -235,10 +263,14 @@ export default function Home() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleReviewAction(answer.id, "request_revision")}
+                        onClick={() => {
+                          setRevisingAnswerId(revisingAnswerId === answer.id ? null : answer.id);
+                          setRevisionNotes("");
+                          setReviewError(null);
+                        }}
                         className="rounded-md border border-border bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800"
                       >
-                        Request revision
+                        {revisingAnswerId === answer.id ? "Cancel" : "Request revision"}
                       </button>
                       <button
                         type="button"
@@ -253,6 +285,25 @@ export default function Home() {
                         Edit
                       </button>
                     </div>
+                    {revisingAnswerId === answer.id && (
+                      <div className="mt-2 w-full">
+                        <textarea
+                          className="w-full rounded-md border border-border bg-background p-2 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                          rows={3}
+                          placeholder="Describe what needs to change (e.g. 'Add a specific metric', 'Make it more concise')..."
+                          value={revisionNotes}
+                          onChange={(e) => setRevisionNotes(e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          disabled={revisionLoading}
+                          onClick={() => handleRevisionSubmit(answer.id)}
+                          className="mt-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {revisionLoading ? "Revising..." : "Submit revision"}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </InterviewQuestionCard>
               ))

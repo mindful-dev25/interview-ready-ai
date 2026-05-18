@@ -28,3 +28,18 @@ GUARDRAIL_PROMPT = """
 TODO: Check generated answers for unsupported claims, exaggeration, sensitive
 personal data, and missing evidence before human review.
 """
+
+REVISION_PROMPT = """
+You are an expert interview coach. Rewrite the interview answer below based on the reviewer's feedback.
+
+Question: {question}
+
+Current answer:
+{draft_answer}
+
+Reviewer feedback:
+{reviewer_notes}
+
+Write an improved answer that directly addresses the feedback. Be specific, concise, and authentic.
+Return only the revised answer text with no preamble or labels.
+"""

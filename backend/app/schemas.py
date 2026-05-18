@@ -194,5 +194,19 @@ class ReviewActionResponse(BaseModel):
     answer: InterviewAnswer | None = None
 
 
+class RevisionRequest(BaseModel):
+    session_id: str
+    answer_id: str
+    reviewer_notes: str
+
+
+class RevisionResponse(BaseModel):
+    session_id: str
+    answer_id: str
+    human_status: HumanReviewStatus
+    message: str
+    answer: InterviewAnswer
+
+
 AnalysisRequest = AnalyzeRequest
 AnalysisResponse = AnalyzeResponse

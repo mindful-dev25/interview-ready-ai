@@ -1,4 +1,4 @@
-import type { AnalysisResponse, FinalReportResponse, ReviewResponse } from "@/lib/types";
+import type { AnalysisResponse, FinalReportResponse, ReviewResponse, RevisionResponse } from "@/lib/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api";
 
@@ -50,6 +50,27 @@ export async function reviewAnswer(
     throw new Error(payload?.detail ?? "Failed to submit review action.");
   }
 
+  return response.json();
+}
+
+export async function requestRevision(
+  sessionId: string,
+  answerId: string,
+  reviewerNotes: string,
+): Promise<RevisionResponse> {
+  const response = await fetch(`${API_BASE_URL}/revision`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      session_id: sessionId,
+      answer_id: answerId,
+      reviewer_notes: reviewerNotes,
+    }),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.detail ?? "Failed to request revision.");
+  }
   return response.json();
 }
 

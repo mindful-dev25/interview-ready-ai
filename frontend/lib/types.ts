@@ -56,3 +56,11 @@ export type FinalReportResponse = {
   message: string;
   report_markdown: string;
 };
+
+export type RevisionResponse = {
+  session_id: string;
+  answer_id: string;
+  human_status: string;
+  message: string;
+  answer: InterviewAnswer;
+};
