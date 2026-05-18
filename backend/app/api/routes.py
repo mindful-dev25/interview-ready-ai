@@ -172,8 +172,7 @@ async def review_answer(request: ReviewActionRequest) -> ReviewActionResponse:
 
     if request.action == ReviewAction.approve:
         answer.human_status = HumanReviewStatus.approved
-        if answer.final_answer is None:
-            answer.final_answer = answer.draft_answer
+        answer.final_answer = answer.draft_answer
         message = "Answer approved."
     elif request.action == ReviewAction.edit:
         if not request.edited_answer:
