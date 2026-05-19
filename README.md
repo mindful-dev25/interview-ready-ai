@@ -48,7 +48,3 @@ npm run dev
 ```
 
 The frontend runs at `http://localhost:3000` by default.
-
-## Status
-
-This is the initial skeleton. Core workflows, agent nodes, retrieval logic, guardrails, persistence, and report generation are intentionally stubbed with TODOs for future implementation.

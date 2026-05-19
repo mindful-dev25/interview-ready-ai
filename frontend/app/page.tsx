@@ -77,6 +77,7 @@ export default function Home() {
     if (!jobUrl.trim()) return;
 
     setLoading(true);
+    setAnalysisStatus("running");
     setReportMarkdown(null);
     setReportError(null);
     setReviewError(null);

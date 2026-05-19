@@ -2,19 +2,21 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
+from pydantic import HttpUrl, TypeAdapter
 
 from app.config import settings
+from app.core.llm import LLMConfigurationError
 from app.schemas import (
     AnalysisRequest,
     AnalysisResponse,
     AnalysisStatus,
+    CompanyResearch,
     FinalReportResponse,
     HealthResponse,
     HumanReviewStatus,
     InterviewAnswer,
     InterviewQuestion,
     JobRequirements,
-    CompanyResearch,
     ReviewAction,
     ReviewActionRequest,
     ReviewActionResponse,
@@ -22,15 +24,28 @@ from app.schemas import (
     RevisionResponse,
     SessionState,
 )
-from app.core.llm import LLMConfigurationError
+from app.services.answer_drafter import AnswerDrafter
 from app.services.answer_reviser import AnswerReviser
+from app.services.company_research import CompanyResearchService
+from app.services.job_scraper import JobScraper
+from app.services.question_generator import QuestionGenerator
+from app.services.rag import RAGService
 from app.services.report_generator import ReportGenerator
+from app.services.resume_parser import ResumeParser
 from app.storage.session_store import SessionStore
 
 router = APIRouter()
 session_store = SessionStore()
 report_generator = ReportGenerator()
 answer_reviser = AnswerReviser()
+job_scraper = JobScraper()
+resume_parser = ResumeParser()
+company_research_service = CompanyResearchService()
+question_generator = QuestionGenerator()
+rag_service = RAGService()
+answer_drafter = AnswerDrafter(rag_service=rag_service)
+
+_http_url_adapter = TypeAdapter(HttpUrl)
 
 
 def _session_status_from_answers(answers: list[InterviewAnswer]) -> AnalysisStatus:
@@ -40,6 +55,153 @@ def _session_status_from_answers(answers: list[InterviewAnswer]) -> AnalysisStat
     ):
         return AnalysisStatus.needs_review
     return AnalysisStatus.complete
+
+
+def _safe_url(raw: str) -> HttpUrl | None:
+    if not raw or not raw.strip():
+        return None
+    try:
+        return _http_url_adapter.validate_python(raw.strip())
+    except Exception:
+        return None
+
+
+def _fallback_questions() -> list[InterviewQuestion]:
+    return [
+        InterviewQuestion(id="q3", question="Tell me about a time you solved a challenging technical problem.", category="behavioral", difficulty="medium", rationale="Evaluates problem-solving.", related_requirements=[]),
+        InterviewQuestion(id="q4", question="How do you prioritize tasks when facing multiple deadlines?", category="strategy", difficulty="medium", rationale="Assesses time management.", related_requirements=[]),
+        InterviewQuestion(id="q5", question="Describe a project you're most proud of.", category="behavioral", difficulty="medium", rationale="Shows ownership and impact.", related_requirements=[]),
+        InterviewQuestion(id="q6", question="How do you handle feedback and code review?", category="behavioral", difficulty="easy", rationale="Evaluates collaboration.", related_requirements=[]),
+        InterviewQuestion(id="q7", question="Tell me about a time you disagreed with a team decision.", category="behavioral", difficulty="medium", rationale="Tests conflict resolution.", related_requirements=[]),
+        InterviewQuestion(id="q8", question="How do you approach learning a new codebase or technology?", category="growth", difficulty="easy", rationale="Shows learning agility.", related_requirements=[]),
+        InterviewQuestion(id="q9", question="Describe a time you delivered under tight constraints.", category="behavioral", difficulty="hard", rationale="Tests judgment under pressure.", related_requirements=[]),
+        InterviewQuestion(id="q10", question="What does good engineering culture mean to you?", category="culture", difficulty="easy", rationale="Tests culture fit.", related_requirements=[]),
+    ]
+
+
+async def _run_analysis_pipeline(session_id: str, request: AnalysisRequest) -> SessionState:
+    # Step 1: Scrape job posting
+    job_data = await job_scraper.scrape(request.job_url)
+
+    job_requirements = JobRequirements(
+        source_url=request.job_url,
+        title=job_data.get("title") or None,
+        company=job_data.get("company") or None,
+        location=job_data.get("location") or None,
+        responsibilities=job_data.get("responsibilities", []),
+        required_skills=job_data.get("required_skills", []),
+        preferred_skills=job_data.get("preferred_skills", []),
+        keywords=job_data.get("keywords", []),
+        raw_text=job_data.get("raw_text"),
+    )
+
+    # Step 2: Parse resume (best-effort — never fail the whole pipeline)
+    resume_data: dict[str, Any] = {}
+    if request.resume_text and request.resume_text.strip():
+        try:
+            resume_data = await resume_parser.parse_text(request.resume_text)
+        except Exception:
+            resume_data = {}
+
+    # Step 3: Research company
+    company_name = job_data.get("company") or ""
+    raw_job_text = job_data.get("raw_text", "")
+    company_research = CompanyResearch(company_name=company_name or None)
+
+    if company_name:
+        try:
+            research_data = await company_research_service.research(company_name, raw_job_text)
+            company_research = CompanyResearch(
+                company_name=research_data.get("company_name") or company_name,
+                website=_safe_url(research_data.get("website", "")),
+                summary=research_data.get("summary") or None,
+                products=research_data.get("products", []),
+                values=research_data.get("values", []),
+                recent_highlights=research_data.get("recent_highlights", []),
+                interview_signals=research_data.get("interview_signals", []),
+            )
+        except Exception:
+            pass
+
+    # Step 4: Index resume + job + company context for RAG
+    documents: list[dict[str, Any]] = []
+    if request.resume_text and request.resume_text.strip():
+        documents.append({"content": request.resume_text, "source_type": "resume", "source": "Resume"})
+
+    job_context = "\n".join(filter(None, [
+        raw_job_text,
+        *job_data.get("responsibilities", []),
+        *job_data.get("required_skills", []),
+        *job_data.get("preferred_skills", []),
+    ]))
+    if job_context.strip():
+        role_label = f"{job_requirements.title or 'Role'} at {job_requirements.company or 'Company'}"
+        documents.append({"content": job_context, "source_type": "job_description", "source": role_label})
+
+    if company_research.summary:
+        company_context = " ".join(filter(None, [
+            company_research.summary,
+            *company_research.values,
+            *company_research.recent_highlights,
+        ]))
+        documents.append({"content": company_context, "source_type": "company_research", "source": company_name or "Company"})
+
+    if documents:
+        await rag_service.index_context(session_id, documents)
+
+    # Step 5: Generate tailored questions
+    job_req_dict = {
+        "title": job_requirements.title,
+        "company": job_requirements.company,
+        "responsibilities": job_requirements.responsibilities,
+        "required_skills": job_requirements.required_skills,
+        "preferred_skills": job_requirements.preferred_skills,
+        "keywords": job_requirements.keywords,
+    }
+    company_dict = {
+        "company_name": company_research.company_name,
+        "summary": company_research.summary,
+        "values": company_research.values,
+    }
+
+    try:
+        generated_questions = await question_generator.generate_questions(
+            resume_data=resume_data,
+            job_requirements=job_req_dict,
+            company_research=company_dict,
+        )
+    except Exception:
+        generated_questions = _fallback_questions()
+
+    for i, q in enumerate(generated_questions):
+        q.id = f"q{i + 3}"
+
+    outro_id = f"q{len(generated_questions) + 3}"
+    all_questions = [
+        InterviewQuestion(id="q1", question="Tell me about yourself.", category="introduction", difficulty="easy", rationale="Opens the interview.", related_requirements=[]),
+        InterviewQuestion(id="q2", question="Why are you interested in this role?", category="motivation", difficulty="easy", rationale="Reveals role alignment.", related_requirements=[]),
+        *generated_questions,
+        InterviewQuestion(id=outro_id, question="What questions do you have for us?", category="candidate_questions", difficulty="easy", rationale="Shows curiosity and preparation.", related_requirements=[]),
+    ]
+
+    # Step 6: Draft answers using RAG
+    answers = await answer_drafter.draft_answers(session_id, all_questions)
+
+    return SessionState(
+        session_id=session_id,
+        status=AnalysisStatus.needs_review,
+        request=request,
+        job_requirements=job_requirements,
+        company_research=company_research,
+        questions=all_questions,
+        answers=answers,
+        metadata={
+            "job_url": str(request.job_url),
+            "has_resume_text": bool(request.resume_text),
+            "company": job_requirements.company,
+            "role": job_requirements.title,
+        },
+    )
 
 
 def _build_analysis_state(session_id: str, request: AnalysisRequest) -> SessionState:
@@ -365,17 +527,23 @@ async def health_check() -> HealthResponse:
 @router.post("/analysis", response_model=AnalysisResponse)
 async def create_analysis(request: AnalysisRequest) -> AnalysisResponse:
     session_id = str(uuid4())
-    initial_state = _build_analysis_state(session_id, request)
-    await session_store.save(session_id, initial_state)
+    try:
+        state = await _run_analysis_pipeline(session_id, request)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {exc}") from exc
+
+    await session_store.save(session_id, state)
 
     return AnalysisResponse(
         session_id=session_id,
-        status=initial_state.status,
-        message="Draft answers are ready and need review.",
-        questions=initial_state.questions,
-        answers=initial_state.answers,
+        status=state.status,
+        message="Draft answers are ready for review.",
+        questions=state.questions,
+        answers=state.answers,
         next_action="review_answers",
-        metadata=initial_state.metadata,
+        metadata=state.metadata,
     )
 
 
