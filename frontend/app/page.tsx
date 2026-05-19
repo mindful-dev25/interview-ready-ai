@@ -26,7 +26,6 @@ export default function Home() {
   const [fileError, setFileError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [analysisStatus, setAnalysisStatus] = useState<AnalysisStatus>("queued");
-  const [message, setMessage] = useState<string>("Enter a job URL and resume text to start the workflow.");
   const [answers, setAnswers] = useState<InterviewAnswer[]>([]);
   const [selectedAnswerId, setSelectedAnswerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -75,26 +74,21 @@ export default function Home() {
   }, [answers]);
 
   async function onAnalyze() {
-    if (!jobUrl.trim()) {
-      setMessage("Please enter a job URL before starting analysis.");
-      return;
-    }
+    if (!jobUrl.trim()) return;
 
     setLoading(true);
     setReportMarkdown(null);
     setReportError(null);
     setReviewError(null);
-    setMessage("Generating draft answers from the provided job URL and resume context...");
 
     try {
       const response = await startAnalysis(jobUrl.trim(), resumeText.trim() || undefined);
       setSessionId(response.sessionId);
       setAnalysisStatus(response.status);
-      setMessage(response.message || "Draft answers are ready.");
       setAnswers(response.answers ?? []);
       setSelectedAnswerId(response.answers?.[0]?.id ?? null);
     } catch (error: unknown) {
-      setMessage("Failed to start the workflow. Please check your inputs and try again.");
+      setReviewError(error instanceof Error ? error.message : "Failed to start analysis.");
     } finally {
       setLoading(false);
     }
@@ -157,7 +151,6 @@ export default function Home() {
       const report = await fetchFinalReport(sessionId);
       setReportMarkdown(report.report_markdown);
       setAnalysisStatus(report.status);
-      setMessage(report.message);
     } catch (error: unknown) {
       setReportError(error instanceof Error ? error.message : "Failed to load the final report.");
     } finally {
@@ -319,9 +312,6 @@ export default function Home() {
         {reviewError ? (
           <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{reviewError}</div>
         ) : null}
-        <div className="rounded-lg border border-border bg-white p-5 text-sm text-muted-foreground">
-          {message}
-        </div>
       </div>
     </main>
   );
