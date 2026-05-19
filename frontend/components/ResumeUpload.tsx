@@ -24,13 +24,13 @@ export default function ResumeUpload({ resumeText, fileName, onTextChange, onFil
       </div>
 
       <textarea
-        className="mt-5 min-h-[12rem] w-full rounded-md border border-border bg-white px-3 py-3 text-sm outline-none ring-primary/25 transition focus:ring-4"
+        className="mt-4 min-h-[6rem] w-full rounded-md border border-border bg-white px-3 py-3 text-sm outline-none ring-primary/25 transition focus:ring-4"
         placeholder="Paste your resume text here..."
         value={resumeText}
         onChange={(event) => onTextChange(event.target.value)}
       />
 
-      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
         <label className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-md border border-dashed border-border bg-muted/40 px-4 text-sm font-medium text-muted-foreground transition hover:border-primary">
           <input
             className="sr-only"

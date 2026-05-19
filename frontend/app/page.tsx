@@ -197,13 +197,9 @@ export default function Home() {
     <main className="min-h-screen px-6 py-8 md:px-10">
       <div className="mx-auto flex max-w-6xl flex-col gap-8">
         <header className="flex flex-col gap-3">
-          <p className="text-sm font-medium text-primary">Local LLM interview prep</p>
-          <h1 className="max-w-3xl text-4xl font-semibold tracking-normal text-foreground md:text-5xl">
+          <h1 className="max-w-3xl text-3xl font-semibold tracking-normal text-foreground md:text-4xl">
             Interview Ready AI
           </h1>
-          <p className="max-w-2xl text-base leading-7 text-muted-foreground">
-            Upload resume context, enter a job URL, review generated answers, and create a final report in one page.
-          </p>
         </header>
 
         <section className="grid gap-4 md:grid-cols-[1fr_1fr]">

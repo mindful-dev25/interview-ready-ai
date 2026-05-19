@@ -21,7 +21,7 @@ export default function JobUrlInput({ jobUrl, onJobUrlChange, onSubmit, isLoadin
           </p>
         </div>
       </div>
-      <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row">
         <input
           className="min-h-11 flex-1 rounded-md border border-border bg-white px-3 text-sm outline-none ring-primary/25 transition focus:ring-4"
           placeholder="https://company.com/careers/software-engineer"
