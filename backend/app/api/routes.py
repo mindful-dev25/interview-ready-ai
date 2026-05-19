@@ -22,6 +22,7 @@ from app.schemas import (
     RevisionResponse,
     SessionState,
 )
+from app.core.llm import LLMConfigurationError
 from app.services.answer_reviser import AnswerReviser
 from app.services.report_generator import ReportGenerator
 from app.storage.session_store import SessionStore
@@ -450,6 +451,11 @@ async def revise_answer(request: RevisionRequest) -> RevisionResponse:
 
     try:
         revised_text = await answer_reviser.revise(answer, request.reviewer_notes)
+    except LLMConfigurationError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"LLM not configured: {exc} — set GROQ_API_KEY and GROQ_CHAT_MODEL in backend/.env and restart the server.",
+        ) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"LLM revision failed: {exc}") from exc
 
