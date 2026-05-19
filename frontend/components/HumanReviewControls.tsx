@@ -28,10 +28,21 @@ export default function HumanReviewControls({
             Monitor answer review status and generate the final report once all approved or edited answers are ready.
           </p>
           <div className="mt-3 flex flex-wrap gap-2 text-sm">
-            <span className="rounded-md border border-border bg-muted px-2 py-1">Pending: {pendingCount}</span>
-            <span className="rounded-md border border-border bg-emerald-50 px-2 py-1">Approved: {approvedCount}</span>
-            <span className="rounded-md border border-border bg-slate-50 px-2 py-1">Edited: {editedCount}</span>
-            <span className="rounded-md border border-border bg-amber-50 px-2 py-1">Needs revision: {needsRevisionCount}</span>
+            {pendingCount > 0 && (
+              <span className="rounded-md border border-border bg-muted px-2 py-1">Pending: {pendingCount}</span>
+            )}
+            {approvedCount > 0 && (
+              <span className="rounded-md border border-border bg-emerald-50 px-2 py-1 text-emerald-800">Approved: {approvedCount}</span>
+            )}
+            {editedCount > 0 && (
+              <span className="rounded-md border border-border bg-slate-50 px-2 py-1">Edited: {editedCount}</span>
+            )}
+            {needsRevisionCount > 0 && (
+              <span className="rounded-md border border-border bg-amber-50 px-2 py-1 text-amber-800">Needs revision: {needsRevisionCount}</span>
+            )}
+            {pendingCount === 0 && approvedCount === 0 && editedCount === 0 && needsRevisionCount === 0 && (
+              <span className="text-muted-foreground">No answers yet.</span>
+            )}
           </div>
         </div>
         <button
