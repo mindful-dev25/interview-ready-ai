@@ -296,7 +296,6 @@ export default function Home() {
           </div>
 
           <aside className="space-y-4">
-            <EvidencePanel items={evidenceItems} />
             <HumanReviewControls
               pendingCount={reviewCounts.pending}
               approvedCount={reviewCounts.approved}
@@ -307,6 +306,7 @@ export default function Home() {
               reportLoading={reportLoading}
             />
             <FinalReport markdown={reportMarkdown ?? undefined} isLoading={reportLoading} ready={reportReady && Boolean(reportMarkdown)} error={reportError} />
+            <EvidencePanel items={evidenceItems} />
           </aside>
         </section>
 

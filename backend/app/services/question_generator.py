@@ -38,7 +38,7 @@ class QuestionGenerator:
         skill_gaps: list[str],
     ) -> str:
         return (
-            "Generate 5-8 tailored interview questions based on the provided resume, job requirements, "
+            "Generate exactly 7 tailored interview questions based on the provided resume, job requirements, "
             "company research, and skill gaps. "
             "Return only valid JSON as an array of objects, each with fields: id, question, category, "
             "difficulty, rationale, related_requirements. "
@@ -80,10 +80,10 @@ class QuestionGenerator:
             except Exception:
                 continue  # Skip invalid items
 
-        if len(questions) < 5:
-            raise ValueError("Generated fewer than 5 valid questions.")
+        if len(questions) < 3:
+            raise ValueError("Generated fewer than 3 valid questions.")
 
-        return questions[:8]  # Limit to 8
+        return questions[:7]
 
     def _coerce_text(self, value: Any) -> str:
         if isinstance(value, str):

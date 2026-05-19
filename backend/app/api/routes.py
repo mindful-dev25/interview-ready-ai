@@ -1,3 +1,4 @@
+import re
 from typing import Any
 from uuid import uuid4
 
@@ -27,7 +28,7 @@ from app.schemas import (
 from app.services.answer_drafter import AnswerDrafter
 from app.services.answer_reviser import AnswerReviser
 from app.services.company_research import CompanyResearchService
-from app.services.job_scraper import JobScraper
+from app.services.job_scraper import JobFetchError, JobScraper
 from app.services.question_generator import QuestionGenerator
 from app.services.rag import RAGService
 from app.services.report_generator import ReportGenerator
@@ -75,16 +76,26 @@ def _fallback_questions() -> list[InterviewQuestion]:
         InterviewQuestion(id="q7", question="Tell me about a time you disagreed with a team decision.", category="behavioral", difficulty="medium", rationale="Tests conflict resolution.", related_requirements=[]),
         InterviewQuestion(id="q8", question="How do you approach learning a new codebase or technology?", category="growth", difficulty="easy", rationale="Shows learning agility.", related_requirements=[]),
         InterviewQuestion(id="q9", question="Describe a time you delivered under tight constraints.", category="behavioral", difficulty="hard", rationale="Tests judgment under pressure.", related_requirements=[]),
-        InterviewQuestion(id="q10", question="What does good engineering culture mean to you?", category="culture", difficulty="easy", rationale="Tests culture fit.", related_requirements=[]),
     ]
 
 
+def _normalize_job_url(raw: str) -> str:
+    url = raw.strip()
+    if url and not re.match(r"^https?://", url, re.IGNORECASE):
+        url = f"https://{url}"
+    return url
+
+
 async def _run_analysis_pipeline(session_id: str, request: AnalysisRequest) -> SessionState:
+    job_url = _normalize_job_url(request.job_url)
+    if not job_url:
+        raise ValueError("A job URL is required.")
+
     # Step 1: Scrape job posting
-    job_data = await job_scraper.scrape(request.job_url)
+    job_data = await job_scraper.scrape(job_url)
 
     job_requirements = JobRequirements(
-        source_url=request.job_url,
+        source_url=job_url,
         title=job_data.get("title") or None,
         company=job_data.get("company") or None,
         location=job_data.get("location") or None,
@@ -147,7 +158,10 @@ async def _run_analysis_pipeline(session_id: str, request: AnalysisRequest) -> S
         documents.append({"content": company_context, "source_type": "company_research", "source": company_name or "Company"})
 
     if documents:
-        await rag_service.index_context(session_id, documents)
+        try:
+            await rag_service.index_context(session_id, documents)
+        except Exception:
+            pass
 
     # Step 5: Generate tailored questions
     job_req_dict = {
@@ -185,7 +199,19 @@ async def _run_analysis_pipeline(session_id: str, request: AnalysisRequest) -> S
     ]
 
     # Step 6: Draft answers using RAG
-    answers = await answer_drafter.draft_answers(session_id, all_questions)
+    try:
+        answers = await answer_drafter.draft_answers(session_id, all_questions)
+    except Exception:
+        answers = [
+            InterviewAnswer(
+                id=f"a{i + 1}",
+                question=q,
+                draft_answer="",
+                evidence_used=[],
+                human_status=HumanReviewStatus.pending,
+            )
+            for i, q in enumerate(all_questions)
+        ]
 
     return SessionState(
         session_id=session_id,
@@ -196,7 +222,7 @@ async def _run_analysis_pipeline(session_id: str, request: AnalysisRequest) -> S
         questions=all_questions,
         answers=answers,
         metadata={
-            "job_url": str(request.job_url),
+            "job_url": job_url,
             "has_resume_text": bool(request.resume_text),
             "company": job_requirements.company,
             "role": job_requirements.title,
@@ -529,6 +555,8 @@ async def create_analysis(request: AnalysisRequest) -> AnalysisResponse:
     session_id = str(uuid4())
     try:
         state = await _run_analysis_pipeline(session_id, request)
+    except JobFetchError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:

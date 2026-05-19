@@ -51,7 +51,7 @@ class AnalyzeRequestMetadata(BaseModel):
 
 
 class AnalyzeRequest(BaseModel):
-    job_url: HttpUrl
+    job_url: str
     resume_text: str | None = None
     resume_filename: str | None = None
     metadata: AnalyzeRequestMetadata = Field(default_factory=AnalyzeRequestMetadata)
@@ -69,7 +69,7 @@ class EvidenceItem(BaseModel):
 
 
 class JobRequirements(BaseModel):
-    source_url: HttpUrl
+    source_url: str
     title: str | None = None
     company: str | None = None
     location: str | None = None

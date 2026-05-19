@@ -4,9 +4,12 @@ from typing import Any
 
 import httpx
 from bs4 import BeautifulSoup, Comment
-from pydantic import HttpUrl
 
 from app.core.llm import GroqLLMClient, LLMGenerationError, LLMMalformedResponseError
+
+
+class JobFetchError(Exception):
+    """Raised when the job posting URL cannot be fetched from the remote server."""
 
 
 class JobScraper:
@@ -16,20 +19,24 @@ class JobScraper:
         self.llm = llm_client or GroqLLMClient()
         self.timeout = timeout
 
-    async def scrape(self, job_url: HttpUrl) -> dict[str, Any]:
-        url = str(job_url)
-        html = await self._fetch_html(url)
+    async def scrape(self, job_url: str) -> dict[str, Any]:
+        url = job_url
+        try:
+            html = await self._fetch_html(url)
+        except JobFetchError:
+            return self._empty_job_data()
+
         text = self._extract_readable_text(html)
 
-        if not text or len(text.split()) < 40:
-            raise ValueError(
-                "Unable to extract a readable job posting from the provided URL. "
-                "Please verify the job page and try again."
-            )
+        if len(text.split()) < 20:
+            return self._empty_job_data(text)
 
-        raw_json = await self._structure_job_description(text, url)
-        parsed = self._parse_json(raw_json)
-        return self._normalize_job_description(parsed, text)
+        try:
+            raw_json = await self._structure_job_description(text, url)
+            parsed = self._parse_json(raw_json)
+            return self._normalize_job_description(parsed, text)
+        except (JobFetchError, LLMMalformedResponseError):
+            return self._empty_job_data(text)
 
     async def _fetch_html(self, url: str) -> str:
         headers = {
@@ -44,13 +51,12 @@ class JobScraper:
                 response = await client.get(url, headers=headers)
                 response.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            raise ValueError(
-                f"Failed to fetch job posting: HTTP {exc.response.status_code}. "
-                f"Please verify the URL and try again."
+            raise JobFetchError(
+                f"Failed to fetch job posting: HTTP {exc.response.status_code}."
             ) from exc
         except httpx.RequestError as exc:
-            raise ValueError(
-                f"Failed to fetch job posting: {exc}. Check your network connection and the job URL."
+            raise JobFetchError(
+                f"Failed to fetch job posting: {exc}."
             ) from exc
 
         return response.text
@@ -88,9 +94,9 @@ class JobScraper:
         try:
             return await self.llm.generate(prompt=prompt, system_prompt=self._system_prompt())
         except (LLMGenerationError, LLMMalformedResponseError) as exc:
-            raise ValueError(
-                "Failed to normalize the job posting with Groq. "
-                "Ensure the job page is accessible and try again."
+            raise JobFetchError(
+                "Failed to structure the job posting with the LLM. "
+                "Check your GROQ_API_KEY and model configuration."
             ) from exc
 
     def _system_prompt(self) -> str:
@@ -138,3 +144,15 @@ class JobScraper:
         if isinstance(value, list):
             return [str(item).strip() for item in value if str(item).strip()]
         return [str(value).strip()]
+
+    def _empty_job_data(self, raw_text: str = "") -> dict[str, Any]:
+        return {
+            "title": "",
+            "company": "",
+            "location": "",
+            "responsibilities": [],
+            "required_skills": [],
+            "preferred_skills": [],
+            "keywords": [],
+            "raw_text": raw_text,
+        }

@@ -5,12 +5,11 @@ Flag uncertainty instead of inventing experience, credentials, or facts.
 """
 
 ANSWER_DRAFT_PROMPT = """
-Draft a tailored interview answer for the given question using only the provided evidence.
-Include citations to evidence IDs in brackets like [evidence_id].
-Do not invent experience, skills, or facts not supported by the evidence.
-If evidence is insufficient, state that clearly and suggest what additional information is needed.
-Provide a concise rationale for why this answer addresses the question.
-Include a confidence score (0-1) based on evidence strength.
+Draft a concise, confident, first-person interview answer for the question below.
+Keep the answer to 2-3 sentences maximum. Be direct and specific — no filler phrases.
+
+If resume or job evidence is provided, use it to make the answer personal and cite evidence IDs in brackets like [evidence_id].
+If no evidence is available, write a strong 2-3 sentence general answer that demonstrates the competency. Never use placeholder brackets or incomplete sentences.
 
 Question: {question}
 
@@ -18,10 +17,10 @@ Evidence:
 {evidence}
 
 Output format:
-- Draft Answer: [your answer here]
-- Rationale: [brief explanation]
+- Draft Answer: [2-3 sentence answer]
+- Rationale: [one sentence]
 - Confidence: [0.0 to 1.0]
-- Evidence Used: [list of evidence IDs]
+- Evidence Used: [comma-separated evidence IDs, or "none"]
 """
 
 GUARDRAIL_PROMPT = """

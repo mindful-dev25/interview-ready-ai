@@ -24,25 +24,34 @@ class AnswerDrafter:
     ) -> list[InterviewAnswer]:
         answers = []
         for question in questions:
-            evidence = await self.rag.retrieve(session_id, question.question, limit=5)
+            try:
+                evidence = await self.rag.retrieve(session_id, question.question, limit=5)
+            except Exception:
+                evidence = []
+
             evidence_formatted = self.rag.format_evidence_for_prompt(evidence)
 
             prompt = ANSWER_DRAFT_PROMPT.format(
                 question=question.question,
-                evidence=evidence_formatted or "No specific evidence retrieved. Answer based on general best practices.",
+                evidence=evidence_formatted or "No resume or job evidence available.",
             )
 
-            response = await self.llm.generate(prompt=prompt, system_prompt=self._system_prompt())
-            parsed = self._parse_response(response)
+            try:
+                response = await self.llm.generate(prompt=prompt, system_prompt=self._system_prompt())
+                parsed = self._parse_response(response)
+            except Exception:
+                parsed = {"draft_answer": ""}
+
             answers.append(self._build_answer(question, evidence, parsed))
 
         return answers
 
     def _system_prompt(self) -> str:
         return (
-            "You are an interview answer drafter. Use the provided evidence to draft concise, "
-            "specific answers. Cite evidence IDs in brackets. If no evidence is available, "
-            "draft a strong general answer."
+            "You are an expert interview coach. Draft concise, confident, first-person interview answers. "
+            "When resume evidence is available, make answers specific and personal. "
+            "When no evidence is available, write strong general answers that demonstrate the competency — "
+            "never use placeholder brackets or leave sentences incomplete."
         )
 
     def _parse_response(self, response: str) -> dict[str, Any]:

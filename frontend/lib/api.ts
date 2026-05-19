@@ -2,17 +2,25 @@ import type { AnalysisResponse, FinalReportResponse, ReviewResponse, RevisionRes
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api";
 
+function normalizeUrl(url: string): string {
+  if (!/^https?:\/\//i.test(url)) {
+    return `https://${url}`;
+  }
+  return url;
+}
+
 export async function startAnalysis(jobUrl: string, resumeText?: string): Promise<AnalysisResponse> {
   const response = await fetch(`${API_BASE_URL}/analysis`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ job_url: jobUrl, resume_text: resumeText }),
+    body: JSON.stringify({ job_url: normalizeUrl(jobUrl), resume_text: resumeText }),
   });
 
   if (!response.ok) {
-    throw new Error("Failed to start interview analysis.");
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.detail ?? "Failed to start interview analysis.");
   }
 
   const data = await response.json();
