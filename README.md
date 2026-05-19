@@ -2,8 +2,7 @@
 
 Interview Ready AI is a Groq-backed, agentic RAG application for interview preparation. Users upload a resume and provide a job description URL, then the app drafts tailored interview answers with guardrails, evidence, and human-in-the-loop review before a final report is generated.
 
-<img width="1037" height="1086" alt="image" src="https://github.com/user-attachments/assets/a504d833-5c37-45eb-bf27-d30d86664dc0" />
-
+<img width="1812" height="3383" alt="localhost_3000_ (1)" src="https://github.com/user-attachments/assets/1d6a2a51-39db-48b8-9b91-fa55fca102ee" />
 
 ## Tech Stack
 
