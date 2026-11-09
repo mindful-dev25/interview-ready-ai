@@ -17,15 +17,13 @@ from app.schemas import (
 )
 from app.services.answer_drafter import AnswerDrafter
 from app.services.company_research import CompanyResearchService
+from app.services.default_questions import fallback_questions, wrap_with_standard_questions
 from app.services.job_scraper import JobScraper
 from app.services.question_generator import QuestionGenerator
 from app.services.rag import RAGService
 from app.services.resume_parser import ResumeParser
 
 _http_url_adapter = TypeAdapter(HttpUrl)
-
-# Generated questions are numbered after the two fixed opening questions.
-_FIRST_GENERATED_QUESTION_NUMBER = 3
 
 
 def normalize_job_url(raw: str) -> str:
@@ -42,32 +40,6 @@ def safe_url(raw: str) -> HttpUrl | None:
         return _http_url_adapter.validate_python(raw.strip())
     except Exception:
         return None
-
-
-def fallback_questions() -> list[InterviewQuestion]:
-    return [
-        InterviewQuestion(id="q3", question="Tell me about a time you solved a challenging technical problem.", category="behavioral", difficulty="medium", rationale="Evaluates problem-solving.", related_requirements=[]),
-        InterviewQuestion(id="q4", question="How do you prioritize tasks when facing multiple deadlines?", category="strategy", difficulty="medium", rationale="Assesses time management.", related_requirements=[]),
-        InterviewQuestion(id="q5", question="Describe a project you're most proud of.", category="behavioral", difficulty="medium", rationale="Shows ownership and impact.", related_requirements=[]),
-        InterviewQuestion(id="q6", question="How do you handle feedback and code review?", category="behavioral", difficulty="easy", rationale="Evaluates collaboration.", related_requirements=[]),
-        InterviewQuestion(id="q7", question="Tell me about a time you disagreed with a team decision.", category="behavioral", difficulty="medium", rationale="Tests conflict resolution.", related_requirements=[]),
-        InterviewQuestion(id="q8", question="How do you approach learning a new codebase or technology?", category="growth", difficulty="easy", rationale="Shows learning agility.", related_requirements=[]),
-        InterviewQuestion(id="q9", question="Describe a time you delivered under tight constraints.", category="behavioral", difficulty="hard", rationale="Tests judgment under pressure.", related_requirements=[]),
-    ]
-
-
-def wrap_with_standard_questions(generated: list[InterviewQuestion]) -> list[InterviewQuestion]:
-    """Renumber generated questions and bookend them with the standard opener/closer."""
-    for i, question in enumerate(generated):
-        question.id = f"q{i + _FIRST_GENERATED_QUESTION_NUMBER}"
-
-    outro_id = f"q{len(generated) + _FIRST_GENERATED_QUESTION_NUMBER}"
-    return [
-        InterviewQuestion(id="q1", question="Tell me about yourself.", category="introduction", difficulty="easy", rationale="Opens the interview.", related_requirements=[]),
-        InterviewQuestion(id="q2", question="Why are you interested in this role?", category="motivation", difficulty="easy", rationale="Reveals role alignment.", related_requirements=[]),
-        *generated,
-        InterviewQuestion(id=outro_id, question="What questions do you have for us?", category="candidate_questions", difficulty="easy", rationale="Shows curiosity and preparation.", related_requirements=[]),
-    ]
 
 
 class AnalysisPipeline:
