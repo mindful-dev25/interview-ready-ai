@@ -2,12 +2,13 @@ from fastapi.testclient import TestClient
 from pydantic import HttpUrl
 
 from app.main import app
-from app.api import routes
+from app.api.dependencies import get_session_store
 from app.storage.session_store import SessionStore
 
 
-def test_analysis_and_review_route_smoke(tmp_path):
-    routes.session_store = SessionStore(path=str(tmp_path))
+def test_analysis_and_review_route_smoke(tmp_path, monkeypatch):
+    store = SessionStore(path=str(tmp_path))
+    monkeypatch.setitem(app.dependency_overrides, get_session_store, lambda: store)
     client = TestClient(app)
 
     response = client.post(
