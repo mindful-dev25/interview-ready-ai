@@ -3,15 +3,17 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.dependencies import get_answer_reviser, get_session_store
-from app.api.session_helpers import find_answer_or_404, load_session_or_404, save_answers
+from app.api.session_helpers import find_answer_or_404, load_session_or_404, save_session
 from app.core.llm import LLMConfigurationError
 from app.schemas import (
+    CitationGuardrailResult,
     HumanReviewStatus,
     ReviewAction,
     ReviewActionRequest,
     ReviewActionResponse,
     RevisionRequest,
     RevisionResponse,
+    TruthfulnessGuardrailResult,
 )
 from app.services.answer_reviser import AnswerReviser
 from app.storage.session_store import SessionStore
@@ -44,7 +46,7 @@ async def review_answer(
     if request.reviewer_notes:
         answer.reviewer_notes.append(request.reviewer_notes)
 
-    await save_answers(store, session)
+    await save_session(store, session)
 
     return ReviewActionResponse(
         session_id=request.session_id,
@@ -52,6 +54,7 @@ async def review_answer(
         human_status=answer.human_status,
         message=message,
         answer=answer,
+        session_status=session.status,
     )
 
 
@@ -77,11 +80,21 @@ async def revise_answer(
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"LLM revision failed: {exc}") from exc
 
+    # The LLM call above takes seconds. Reload so reviews of other answers made
+    # in the meantime are kept instead of being overwritten by a stale copy.
+    session = await load_session_or_404(store, request.session_id)
+    answer = find_answer_or_404(session, request.answer_id)
+
     answer.draft_answer = revised_text
+    answer.final_answer = None
     answer.human_status = HumanReviewStatus.pending
     answer.reviewer_notes.append(request.reviewer_notes)
+    # The earlier guardrail findings described the previous draft.
+    answer.truthfulness_guardrail = TruthfulnessGuardrailResult()
+    answer.citation_guardrail = CitationGuardrailResult()
+    answer.suggested_safe_rewrite = None
 
-    await save_answers(store, session)
+    await save_session(store, session)
 
     return RevisionResponse(
         session_id=request.session_id,
@@ -89,4 +102,5 @@ async def revise_answer(
         human_status=answer.human_status,
         message="Answer revised by AI. Please review the updated draft.",
         answer=answer,
+        session_status=session.status,
     )

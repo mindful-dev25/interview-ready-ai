@@ -1,3 +1,11 @@
+# Upper bound on scraped page text placed in a prompt, to bound token cost and context size.
+MAX_PAGE_TEXT_CHARS = 12_000
+
+
+def truncate_for_prompt(text: str, limit: int = MAX_PAGE_TEXT_CHARS) -> str:
+    return text if len(text) <= limit else text[:limit]
+
+
 SYSTEM_PROMPT = """
 You are Interview Ready AI, a local interview preparation assistant.
 Use only grounded resume, job description, and retrieved company evidence.
@@ -21,11 +29,6 @@ Output format:
 - Rationale: [one sentence]
 - Confidence: [0.0 to 1.0]
 - Evidence Used: [comma-separated evidence IDs, or "none"]
-"""
-
-GUARDRAIL_PROMPT = """
-TODO: Check generated answers for unsupported claims, exaggeration, sensitive
-personal data, and missing evidence before human review.
 """
 
 REVISION_PROMPT = """

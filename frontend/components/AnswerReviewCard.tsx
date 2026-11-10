@@ -1,6 +1,6 @@
 import GuardrailBadge from "@/components/GuardrailBadge";
 import InterviewQuestionCard from "@/components/InterviewQuestionCard";
-import { answerText, statusLabel, statusTone } from "@/lib/answers";
+import { answerText, guardrailNotes, statusLabel, statusTone } from "@/lib/answers";
 import type { InterviewAnswer } from "@/lib/types";
 
 type AnswerReviewCardProps = {
@@ -29,6 +29,7 @@ export default function AnswerReviewCard({
   onSubmitRevision,
 }: AnswerReviewCardProps) {
   const text = answerText(answer);
+  const notes = guardrailNotes(answer);
 
   function promptForEdit() {
     const edited = prompt("Edit final answer:", text);
@@ -40,7 +41,22 @@ export default function AnswerReviewCard({
   return (
     <InterviewQuestionCard question={answer.question.question} answer={text}>
       <div className="flex flex-col items-end gap-2 w-full">
-        <GuardrailBadge label={statusLabel(answer)} tone={statusTone(answer)} />
+        <div className="flex flex-wrap justify-end gap-2">
+          {notes?.length === 0 && <GuardrailBadge label="Guardrails passed" tone="success" />}
+          <GuardrailBadge label={statusLabel(answer)} tone={statusTone(answer)} />
+        </div>
+        {notes && notes.length > 0 && (
+          <details className="w-full text-sm">
+            <summary className="cursor-pointer text-right font-medium text-amber-800">
+              {notes.length} guardrail {notes.length === 1 ? "note" : "notes"}
+            </summary>
+            <ul className="mt-1 list-disc space-y-1 pl-5 text-left text-muted-foreground">
+              {notes.map((note) => (
+                <li key={note}>{note}</li>
+              ))}
+            </ul>
+          </details>
+        )}
         <div className="flex flex-wrap gap-2">
           <button
             type="button"

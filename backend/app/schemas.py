@@ -192,6 +192,8 @@ class ReviewActionResponse(BaseModel):
     human_status: HumanReviewStatus
     message: str
     answer: InterviewAnswer | None = None
+    # Overall session status after this action, so clients need not derive it.
+    session_status: AnalysisStatus | None = None
 
 
 class RevisionRequest(BaseModel):
@@ -206,6 +208,7 @@ class RevisionResponse(BaseModel):
     human_status: HumanReviewStatus
     message: str
     answer: InterviewAnswer
+    session_status: AnalysisStatus | None = None
 
 
 AnalysisRequest = AnalyzeRequest

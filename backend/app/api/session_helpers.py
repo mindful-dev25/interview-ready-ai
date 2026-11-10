@@ -29,13 +29,12 @@ def session_status_from_answers(answers: list[InterviewAnswer]) -> AnalysisStatu
     return AnalysisStatus.complete
 
 
-async def save_answers(store: SessionStore, session: SessionState) -> None:
-    """Recompute the session status from its answers and persist both."""
+async def save_session(store: SessionStore, session: SessionState) -> None:
+    """Recompute the session status from its answers and persist the session.
+
+    Call this without awaiting anything slow between loading the session and
+    saving it: a session loaded before a long ``await`` may be stale, and saving
+    it would overwrite changes made in the meantime.
+    """
     session.status = session_status_from_answers(session.answers)
-    await store.update(
-        session.session_id,
-        {
-            "answers": session.answers,
-            "status": session.status,
-        },
-    )
+    await store.save(session.session_id, session)

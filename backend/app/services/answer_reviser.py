@@ -1,11 +1,13 @@
-from app.core.llm import GroqLLMClient, LLMGenerationError
+from app.core.llm import GroqLLMClient
 from app.core.prompts import REVISION_PROMPT, SYSTEM_PROMPT
 from app.schemas import InterviewAnswer
 
 
 class AnswerReviser:
-    def __init__(self) -> None:
-        self._llm = GroqLLMClient()
+    """Rewrite a drafted answer according to the reviewer's notes."""
+
+    def __init__(self, llm_client: GroqLLMClient | None = None) -> None:
+        self.llm = llm_client or GroqLLMClient()
 
     async def revise(self, answer: InterviewAnswer, reviewer_notes: str) -> str:
         prompt = REVISION_PROMPT.format(
@@ -13,7 +15,4 @@ class AnswerReviser:
             draft_answer=answer.draft_answer,
             reviewer_notes=reviewer_notes,
         )
-        try:
-            return await self._llm.generate(prompt, system_prompt=SYSTEM_PROMPT)
-        except LLMGenerationError:
-            raise
+        return await self.llm.generate(prompt, system_prompt=SYSTEM_PROMPT)

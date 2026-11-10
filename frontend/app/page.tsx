@@ -44,6 +44,16 @@ export default function Home() {
 
         <AnalysisProgress status={session.analysisStatus} />
 
+        {session.warnings.length > 0 && (
+          <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <ul className="list-disc space-y-1 pl-5">
+              {session.warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-4">
             {session.answers.length === 0 ? (

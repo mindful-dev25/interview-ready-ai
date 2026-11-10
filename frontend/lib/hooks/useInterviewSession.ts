@@ -1,9 +1,7 @@
 import { useMemo, useState } from "react";
 import { fetchFinalReport, requestRevision, reviewAnswer, startAnalysis } from "@/lib/api";
 import { collectEvidence, countReviews, errorMessage, isReviewed } from "@/lib/answers";
-import type { AnalysisStatus, InterviewAnswer } from "@/lib/types";
-
-export type ReviewAction = "approve" | "edit" | "request_revision";
+import type { AnalysisStatus, InterviewAnswer, ReviewAction } from "@/lib/types";
 
 /** Session state and API actions for analysis, answer review, revision, and the final report. */
 export function useInterviewSession() {
@@ -11,6 +9,7 @@ export function useInterviewSession() {
   const [analysisStatus, setAnalysisStatus] = useState<AnalysisStatus>("queued");
   const [answers, setAnswers] = useState<InterviewAnswer[]>([]);
   const [loading, setLoading] = useState(false);
+  const [warnings, setWarnings] = useState<string[]>([]);
   const [reviewError, setReviewError] = useState<string | null>(null);
 
   const [revisingAnswerId, setRevisingAnswerId] = useState<string | null>(null);
@@ -37,13 +36,16 @@ export function useInterviewSession() {
     setReportMarkdown(null);
     setReportError(null);
     setReviewError(null);
+    setWarnings([]);
 
     try {
       const response = await startAnalysis(jobUrl.trim(), resumeText.trim() || undefined);
-      setSessionId(response.sessionId);
+      setSessionId(response.session_id);
       setAnalysisStatus(response.status);
       setAnswers(response.answers ?? []);
+      setWarnings(response.metadata?.warnings ?? []);
     } catch (error: unknown) {
+      setAnalysisStatus("failed");
       setReviewError(errorMessage(error, "Failed to start analysis."));
     } finally {
       setLoading(false);
@@ -62,7 +64,9 @@ export function useInterviewSession() {
       if (result.answer) {
         replaceAnswer(result.answer);
       }
-      setAnalysisStatus((prev) => (reviewCounts.pending - 1 <= 0 ? "complete" : prev));
+      if (result.session_status) {
+        setAnalysisStatus(result.session_status);
+      }
     } catch (error: unknown) {
       setReviewError(errorMessage(error, "Unable to update review status."));
     }
@@ -89,6 +93,9 @@ export function useInterviewSession() {
     try {
       const result = await requestRevision(sessionId, answerId, revisionNotes);
       replaceAnswer(result.answer);
+      if (result.session_status) {
+        setAnalysisStatus(result.session_status);
+      }
     } catch (error: unknown) {
       setReviewError(errorMessage(error, "Revision failed."));
     } finally {
@@ -121,6 +128,7 @@ export function useInterviewSession() {
     analysisStatus,
     answers,
     loading,
+    warnings,
     reviewError,
     evidenceItems,
     reviewCounts,

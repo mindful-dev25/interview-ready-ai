@@ -12,6 +12,9 @@ npm run dev
 
 The app runs at `http://localhost:3000`.
 
-## Current Scope
+## Structure
 
-This is a minimal placeholder UI using React, TypeScript, Tailwind CSS, and component boundaries compatible with a future shadcn/ui setup. Full API integration and interactive state management are intentionally deferred.
+- `app/page.tsx` composes the page.
+- `lib/hooks/` holds the session state and API actions (`useInterviewSession`) and resume input (`useResumeInput`).
+- `lib/api.ts` is the API client; `lib/types.ts` mirrors the backend response models.
+- `components/` holds the UI pieces, built with React, TypeScript, and Tailwind CSS.

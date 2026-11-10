@@ -1,8 +1,17 @@
+import asyncio
+import logging
 from typing import Any
 
 import httpx
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+# Transient failures worth retrying: rate limiting and upstream hiccups.
+_RETRYABLE_STATUS_CODES = {429, 502, 503, 504}
+_MAX_ATTEMPTS = 3
+_MAX_RETRY_DELAY_SECONDS = 10.0
 
 
 class LLMConfigurationError(RuntimeError):
@@ -38,12 +47,16 @@ class GroqLLMClient:
         base_url: str | None = None,
         model: str | None = None,
         timeout: float = 30.0,
+        transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self.api_key = settings.groq_api_key if api_key is None else api_key
         configured_base_url = settings.groq_base_url if base_url is None else base_url
         self.base_url = configured_base_url.rstrip("/")
         self.model = settings.groq_chat_model if model is None else model
         self.timeout = timeout
+        self._transport = transport  # lets tests substitute a fake HTTP layer
+        self._client: httpx.AsyncClient | None = None
+        self._client_loop: asyncio.AbstractEventLoop | None = None
 
     async def generate(self, prompt: str, system_prompt: str | None = None) -> str:
         api_key, base_url, model = self._validated_config()
@@ -55,25 +68,60 @@ class GroqLLMClient:
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
+        url = f"{base_url}/chat/completions"
 
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    f"{base_url}/chat/completions",
-                    headers=headers,
-                    json=payload,
+        attempt = 1
+        while True:
+            try:
+                response = await self._http_client().post(url, headers=headers, json=payload)
+            except httpx.TimeoutException as exc:
+                raise LLMTimeoutError(
+                    f"Groq request timed out after {self.timeout} seconds."
+                ) from exc
+            except httpx.RequestError as exc:
+                raise LLMGenerationError(f"Groq request failed: {exc}") from exc
+
+            if response.status_code in _RETRYABLE_STATUS_CODES and attempt < _MAX_ATTEMPTS:
+                delay = self._retry_delay(response, attempt)
+                logger.warning(
+                    "Groq returned %s; retrying in %.1fs (attempt %d of %d).",
+                    response.status_code, delay, attempt, _MAX_ATTEMPTS,
                 )
-                response.raise_for_status()
-        except httpx.TimeoutException as exc:
-            raise LLMTimeoutError(
-                f"Groq request timed out after {self.timeout} seconds."
-            ) from exc
-        except httpx.HTTPStatusError as exc:
-            raise self._status_error(exc.response) from exc
-        except httpx.RequestError as exc:
-            raise LLMGenerationError(f"Groq request failed: {exc}") from exc
+                await asyncio.sleep(delay)
+                attempt += 1
+                continue
 
-        return self._parse_text_response(response)
+            if response.is_error:
+                raise self._status_error(response)
+            return self._parse_text_response(response)
+
+    async def aclose(self) -> None:
+        """Close the pooled HTTP connection, if one was opened."""
+        if self._client is not None and not self._client.is_closed:
+            await self._client.aclose()
+        self._client = None
+        self._client_loop = None
+
+    def _http_client(self) -> httpx.AsyncClient:
+        """Return a pooled client so calls reuse one connection instead of a new TLS handshake each.
+
+        An httpx client is tied to the event loop it was created on, so a new one
+        is made if the loop changed (as happens between test runs).
+        """
+        loop = asyncio.get_running_loop()
+        if self._client is None or self._client.is_closed or self._client_loop is not loop:
+            self._client = httpx.AsyncClient(timeout=self.timeout, transport=self._transport)
+            self._client_loop = loop
+        return self._client
+
+    @staticmethod
+    def _retry_delay(response: httpx.Response, attempt: int) -> float:
+        """Honor the server's Retry-After when given, otherwise back off exponentially."""
+        try:
+            delay = float(response.headers.get("retry-after", ""))
+        except ValueError:
+            delay = float(2 ** (attempt - 1))
+        return min(max(delay, 0.0), _MAX_RETRY_DELAY_SECONDS)
 
     def _build_messages(
         self, prompt: str, system_prompt: str | None

@@ -1,6 +1,6 @@
-import type { EvidenceItem, InterviewAnswer } from "@/lib/types";
+import type { EvidenceItem, HumanReviewStatus, InterviewAnswer } from "@/lib/types";
 
-export type ReviewStatus = NonNullable<InterviewAnswer["human_status"]>;
+export type ReviewStatus = HumanReviewStatus;
 export type ReviewCounts = Record<ReviewStatus, number>;
 
 const statusLabels: Record<ReviewStatus, string> = {
@@ -32,6 +32,22 @@ export function statusTone(answer: InterviewAnswer) {
 /** The reviewer's final answer if there is one, otherwise the AI draft. */
 export function answerText(answer: InterviewAnswer): string {
   return answer.final_answer?.trim() ? answer.final_answer : answer.draft_answer;
+}
+
+/**
+ * Distinct guardrail findings for an answer: an empty list means the checks
+ * passed, and null means the answer has not been checked (for example after a revision).
+ */
+export function guardrailNotes(answer: InterviewAnswer): string[] | null {
+  const truthfulness = answer.truthfulness_guardrail;
+  const citation = answer.citation_guardrail;
+  if (!truthfulness?.summary && !citation?.summary) return null;
+
+  const notes = [
+    ...(truthfulness?.claims ?? []).map((claim) => claim.explanation),
+    ...(citation?.weak_citation_notes ?? []),
+  ].filter((note): note is string => Boolean(note));
+  return [...new Set(notes)];
 }
 
 export function isReviewed(answer: InterviewAnswer): boolean {

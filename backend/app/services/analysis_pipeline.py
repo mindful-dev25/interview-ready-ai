@@ -1,5 +1,7 @@
 """End-to-end analysis pipeline: job posting + resume -> reviewed-ready interview prep."""
 
+import asyncio
+import logging
 import re
 from typing import Any
 
@@ -17,11 +19,14 @@ from app.schemas import (
 )
 from app.services.answer_drafter import AnswerDrafter
 from app.services.company_research import CompanyResearchService
+from app.services.context_documents import build_context_documents
 from app.services.default_questions import fallback_questions, wrap_with_standard_questions
 from app.services.job_scraper import JobScraper
 from app.services.question_generator import QuestionGenerator
 from app.services.rag import RAGService
 from app.services.resume_parser import ResumeParser
+
+logger = logging.getLogger(__name__)
 
 _http_url_adapter = TypeAdapter(HttpUrl)
 
@@ -45,7 +50,8 @@ def safe_url(raw: str) -> HttpUrl | None:
 class AnalysisPipeline:
     """Orchestrates scraping, parsing, research, indexing, question generation and drafting.
 
-    Only job scraping is allowed to fail the pipeline; every later step degrades gracefully.
+    Every step degrades gracefully: a failed step is logged and replaced by a
+    generic fallback, and user-relevant fallbacks are reported in ``metadata["warnings"]``.
     """
 
     def __init__(
@@ -69,15 +75,17 @@ class AnalysisPipeline:
         if not job_url:
             raise ValueError("A job URL is required.")
 
-        job_data = await self.job_scraper.scrape(job_url)
+        # The resume and the job posting are independent, so they are processed concurrently.
+        (job_data, company_research), (resume_data, resume_warning) = await asyncio.gather(
+            self._load_job(job_url),
+            self._parse_resume(request.resume_text),
+        )
         job_requirements = self._build_job_requirements(job_url, job_data)
-        resume_data = await self._parse_resume(request.resume_text)
-        company_research = await self._research_company(job_data)
 
         await self._index_context(session_id, request.resume_text, job_data, job_requirements, company_research)
 
         questions = await self._generate_questions(resume_data, job_requirements, company_research)
-        answers = await self._draft_answers(session_id, questions)
+        answers = await self._draft_answers(session_id, questions, request.resume_text)
 
         return SessionState(
             session_id=session_id,
@@ -92,8 +100,14 @@ class AnalysisPipeline:
                 "has_resume_text": bool(request.resume_text),
                 "company": job_requirements.company,
                 "role": job_requirements.title,
+                # Shown to the user: steps that fell back to generic behavior.
+                "warnings": [w for w in (job_data.get("warning"), resume_warning) if w],
             },
         )
+
+    async def _load_job(self, job_url: str) -> tuple[dict[str, Any], CompanyResearch]:
+        job_data = await self.job_scraper.scrape(job_url)
+        return job_data, await self._research_company(job_data)
 
     @staticmethod
     def _build_job_requirements(job_url: str, job_data: dict[str, Any]) -> JobRequirements:
@@ -109,13 +123,18 @@ class AnalysisPipeline:
             raw_text=job_data.get("raw_text"),
         )
 
-    async def _parse_resume(self, resume_text: str | None) -> dict[str, Any]:
+    async def _parse_resume(self, resume_text: str | None) -> tuple[dict[str, Any], str | None]:
+        """Return the structured resume and, if parsing fell back, a warning for the user."""
         if not resume_text or not resume_text.strip():
-            return {}
+            return {}, None
         try:
-            return await self.resume_parser.parse_text(resume_text)
+            return await self.resume_parser.parse_text(resume_text), None
+        except ValueError as exc:
+            # Raised for resumes that are too short or unstructured; the message is user-facing.
+            return {}, str(exc)
         except Exception:
-            return {}
+            logger.warning("Resume parsing failed; continuing without structured resume data.", exc_info=True)
+            return {}, "The resume could not be analyzed in detail, so questions may be less tailored."
 
     async def _research_company(self, job_data: dict[str, Any]) -> CompanyResearch:
         company_name = job_data.get("company") or ""
@@ -136,6 +155,7 @@ class AnalysisPipeline:
                 interview_signals=research_data.get("interview_signals", []),
             )
         except Exception:
+            logger.warning("Company research failed for %r.", company_name, exc_info=True)
             return CompanyResearch(company_name=company_name)
 
     async def _index_context(
@@ -146,36 +166,13 @@ class AnalysisPipeline:
         job_requirements: JobRequirements,
         company_research: CompanyResearch,
     ) -> None:
-        documents: list[dict[str, Any]] = []
-
-        if resume_text and resume_text.strip():
-            documents.append({"content": resume_text, "source_type": "resume", "source": "Resume"})
-
-        job_context = "\n".join(filter(None, [
-            job_data.get("raw_text", ""),
-            *job_data.get("responsibilities", []),
-            *job_data.get("required_skills", []),
-            *job_data.get("preferred_skills", []),
-        ]))
-        if job_context.strip():
-            role_label = f"{job_requirements.title or 'Role'} at {job_requirements.company or 'Company'}"
-            documents.append({"content": job_context, "source_type": "job_description", "source": role_label})
-
-        if company_research.summary:
-            company_context = " ".join(filter(None, [
-                company_research.summary,
-                *company_research.values,
-                *company_research.recent_highlights,
-            ]))
-            source = job_data.get("company") or "Company"
-            documents.append({"content": company_context, "source_type": "company_research", "source": source})
-
+        documents = build_context_documents(resume_text, job_data, job_requirements, company_research)
         if not documents:
             return
         try:
             await self.rag_service.index_context(session_id, documents)
         except Exception:
-            pass
+            logger.warning("Indexing context failed; answers will be drafted without evidence.", exc_info=True)
 
     async def _generate_questions(
         self,
@@ -204,16 +201,18 @@ class AnalysisPipeline:
                 company_research=company_dict,
             )
         except Exception:
+            logger.warning("Question generation failed; using fallback questions.", exc_info=True)
             generated = fallback_questions()
 
         return wrap_with_standard_questions(generated)
 
     async def _draft_answers(
-        self, session_id: str, questions: list[InterviewQuestion]
+        self, session_id: str, questions: list[InterviewQuestion], resume_text: str | None
     ) -> list[InterviewAnswer]:
         try:
-            return await self.answer_drafter.draft_answers(session_id, questions)
+            return await self.answer_drafter.draft_answers(session_id, questions, resume_text=resume_text)
         except Exception:
+            logger.warning("Answer drafting failed; returning empty drafts.", exc_info=True)
             return [
                 InterviewAnswer(
                     id=f"a{i + 1}",

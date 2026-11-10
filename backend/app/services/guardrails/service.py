@@ -19,7 +19,13 @@ class GuardrailService:
         answer: str,
         evidence: list[dict[str, Any]],
         resume_text: str | None = None,
+        suggest_rewrite: bool = True,
     ) -> dict[str, Any]:
+        """Check an answer against its evidence.
+
+        The checks themselves are local heuristics. ``suggest_rewrite`` adds an
+        LLM call for answers that fail, so callers on a hot path can turn it off.
+        """
         answer_text = answer.strip()
         cited_ids = extract_evidence_ids(answer_text)
         missing_citations = find_missing_citation_claims(answer_text, cited_ids)
@@ -28,8 +34,10 @@ class GuardrailService:
             answer_text, evidence, missing_citations, resume_text
         )
         citation_result = evaluate_citations(evidence, cited_ids, missing_citations)
-        suggested_safe_rewrite = await self.rewriter.rewrite(
-            answer_text, truthfulness_result, citation_result
+        suggested_safe_rewrite = (
+            await self.rewriter.rewrite(answer_text, truthfulness_result, citation_result)
+            if suggest_rewrite
+            else None
         )
 
         return {

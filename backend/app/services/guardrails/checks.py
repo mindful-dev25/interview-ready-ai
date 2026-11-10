@@ -25,6 +25,8 @@ def evaluate_truthfulness(
 ) -> TruthfulnessGuardrailResult:
     resume_ids = resume_evidence_ids(evidence)
     resume_text_lower = resume_text.lower() if resume_text else ""
+    # Without any resume there is nothing to check personal claims against.
+    has_resume = bool(resume_ids or resume_text_lower)
 
     claims: list[GuardrailClaim] = [
         missing_citation_claim(sentence) for sentence in missing_citation_sentences
@@ -34,7 +36,7 @@ def evaluate_truthfulness(
         for finding in (
             find_sensitive_information(sentence),
             find_exaggeration(sentence),
-            find_claim_not_in_resume(sentence, resume_ids, resume_text_lower),
+            find_claim_not_in_resume(sentence, resume_ids, resume_text_lower) if has_resume else None,
         ):
             if finding:
                 claims.append(finding)

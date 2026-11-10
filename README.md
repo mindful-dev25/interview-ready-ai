@@ -7,9 +7,9 @@ Interview Ready AI is a Groq-backed, agentic RAG application for interview prepa
 ## Tech Stack
 
 - Backend: Python, FastAPI
-- Agent orchestration: LangGraph
+- Orchestration: an async analysis pipeline (scrape, parse, research, index, generate, draft, check)
 - LLM provider: Groq via OpenAI-compatible HTTP calls
-- Vector DB: Chroma
+- Retrieval: local keyword index stored as JSON files
 - Frontend: Next.js, React, TypeScript
 - Styling: Tailwind CSS
 - UI components: shadcn/ui
@@ -17,7 +17,7 @@ Interview Ready AI is a Groq-backed, agentic RAG application for interview prepa
 ## Project Structure
 
 ```text
-backend/   FastAPI API, agent graph, RAG services, and storage adapters
+backend/   FastAPI API, analysis pipeline, RAG and guardrail services, and storage adapters
 frontend/  Next.js app shell and interview-prep UI components
 ```
 
@@ -38,7 +38,7 @@ The backend runs at `http://localhost:8000` by default.
 
 Set `GROQ_API_KEY` and `GROQ_CHAT_MODEL` in `backend/.env` before using LLM generation. The backend uses Groq's OpenAI-compatible API at `https://api.groq.com/openai/v1` by default.
 
-Note: Chroma vector retrieval and session persistence are local, file-based services. LLM generation uses Groq, not Ollama.
+Note: Retrieval and session persistence are local, file-based services. LLM generation uses Groq, not Ollama.
 
 ### Frontend
 
