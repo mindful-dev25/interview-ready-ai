@@ -57,6 +57,14 @@ class AnalyzeRequest(BaseModel):
     metadata: AnalyzeRequestMetadata = Field(default_factory=AnalyzeRequestMetadata)
 
 
+class ResumeTextResponse(BaseModel):
+    """Text extracted from an uploaded resume file."""
+
+    text: str
+    filename: str | None = None
+    page_count: int
+
+
 class EvidenceItem(BaseModel):
     id: str
     source_type: EvidenceSourceType

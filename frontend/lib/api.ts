@@ -1,6 +1,7 @@
 import type {
   AnalysisResponse,
   FinalReportResponse,
+  ResumeTextResponse,
   ReviewAction,
   ReviewResponse,
   RevisionResponse,
@@ -9,7 +10,8 @@ import type {
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api";
 
 /**
- * Call the API and return the parsed JSON. Passing a body makes it a POST.
+ * Call the API and return the parsed JSON. Passing a body makes it a POST:
+ * FormData is sent as a file upload, anything else as JSON.
  * On an error response, throws with the server's `detail` message when it is a
  * string (validation errors send a list instead), otherwise with `fallbackError`.
  */
@@ -17,11 +19,13 @@ async function request<T>(path: string, fallbackError: string, body?: unknown): 
   const init: RequestInit | undefined =
     body === undefined
       ? undefined
-      : {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        };
+      : body instanceof FormData
+        ? { method: "POST", body }
+        : {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          };
 
   const response = await fetch(`${API_BASE_URL}${path}`, init);
   if (!response.ok) {
@@ -30,6 +34,12 @@ async function request<T>(path: string, fallbackError: string, body?: unknown): 
     throw new Error(typeof detail === "string" && detail ? detail : fallbackError);
   }
   return response.json();
+}
+
+export function extractResumeText(file: File): Promise<ResumeTextResponse> {
+  const form = new FormData();
+  form.append("file", file);
+  return request("/resume/extract", "Failed to read the PDF resume.", form);
 }
 
 export function startAnalysis(jobUrl: string, resumeText?: string): Promise<AnalysisResponse> {

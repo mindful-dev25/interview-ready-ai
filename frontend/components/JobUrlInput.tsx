@@ -5,9 +5,11 @@ type JobUrlInputProps = {
   onJobUrlChange: (value: string) => void;
   onSubmit: () => void;
   isLoading: boolean;
+  /** Blocks submitting without showing the loading label, e.g. while a resume file is still being read. */
+  disabled?: boolean;
 };
 
-export default function JobUrlInput({ jobUrl, onJobUrlChange, onSubmit, isLoading }: JobUrlInputProps) {
+export default function JobUrlInput({ jobUrl, onJobUrlChange, onSubmit, isLoading, disabled = false }: JobUrlInputProps) {
   return (
     <section className="rounded-lg border border-border bg-white p-5 shadow-sm">
       <div className="flex items-center gap-3">
@@ -32,7 +34,7 @@ export default function JobUrlInput({ jobUrl, onJobUrlChange, onSubmit, isLoadin
         <button
           type="button"
           onClick={onSubmit}
-          disabled={isLoading}
+          disabled={isLoading || disabled}
           className="min-h-11 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isLoading ? "Analyzing..." : "Analyze"}

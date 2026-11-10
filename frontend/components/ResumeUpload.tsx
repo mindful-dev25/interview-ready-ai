@@ -6,9 +6,17 @@ type ResumeUploadProps = {
   onTextChange: (value: string) => void;
   onFileChange: (file: File | null) => void;
   fileError?: string | null;
+  isReadingFile?: boolean;
 };
 
-export default function ResumeUpload({ resumeText, fileName, onTextChange, onFileChange, fileError }: ResumeUploadProps) {
+export default function ResumeUpload({
+  resumeText,
+  fileName,
+  onTextChange,
+  onFileChange,
+  fileError,
+  isReadingFile = false,
+}: ResumeUploadProps) {
   return (
     <section className="rounded-lg border border-border bg-white p-5 shadow-sm">
       <div className="flex items-center gap-3">
@@ -18,7 +26,7 @@ export default function ResumeUpload({ resumeText, fileName, onTextChange, onFil
         <div>
           <h2 className="text-lg font-semibold">Resume</h2>
           <p className="text-sm text-muted-foreground">
-            Paste resume text or upload a plain text file to ground the answer generation.
+            Paste resume text or upload a PDF or plain text file to ground the answer generation.
           </p>
         </div>
       </div>
@@ -35,12 +43,20 @@ export default function ResumeUpload({ resumeText, fileName, onTextChange, onFil
           <input
             className="sr-only"
             type="file"
-            accept=".txt,.md"
-            onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
+            accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown"
+            onChange={(event) => {
+              onFileChange(event.target.files?.[0] ?? null);
+              // Clear the input so choosing the same file again triggers another read.
+              event.target.value = "";
+            }}
           />
-          Upload plain text resume
+          Upload resume (PDF or text)
         </label>
-        {fileName ? <span className="text-sm text-muted-foreground">{fileName}</span> : null}
+        {fileName ? (
+          <span className="text-sm text-muted-foreground" role="status">
+            {isReadingFile ? `Reading ${fileName}...` : fileName}
+          </span>
+        ) : null}
       </div>
 
       {fileError ? <p className="mt-2 text-sm text-red-700">{fileError}</p> : null}

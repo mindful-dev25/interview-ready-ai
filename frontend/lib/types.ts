@@ -91,6 +91,12 @@ export type RevisionResponse = {
   session_status?: AnalysisStatus | null;
 };
 
+export type ResumeTextResponse = {
+  text: string;
+  filename?: string | null;
+  page_count: number;
+};
+
 export type FinalReportResponse = {
   session_id: string;
   status: AnalysisStatus;

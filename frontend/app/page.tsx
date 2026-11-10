@@ -33,12 +33,14 @@ export default function Home() {
             onTextChange={resume.setResumeText}
             onFileChange={resume.handleFileChange}
             fileError={resume.fileError}
+            isReadingFile={resume.isReadingFile}
           />
           <JobUrlInput
             jobUrl={jobUrl}
             onJobUrlChange={setJobUrl}
             onSubmit={() => session.analyze(jobUrl, resume.resumeText)}
             isLoading={session.loading}
+            disabled={resume.isReadingFile}
           />
         </section>
 
