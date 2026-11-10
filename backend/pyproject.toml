@@ -1,0 +1,23 @@
+[project]
+name = "interview-ready-ai-backend"
+version = "0.1.0"
+description = "FastAPI backend for Interview Ready AI"
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=2.8.0",
+    "beautifulsoup4>=4.12.3",
+    "fastapi>=0.115.6",
+    "httpx>=0.28.1",
+    "pydantic-settings>=2.7.1",
+    "uvicorn[standard]>=0.34.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+]
+
+[tool.pytest.ini_options]
+# Lets `pytest` find the `app` package and the shared test helpers from the backend folder.
+pythonpath = [".", "tests"]
+testpaths = ["tests"]

@@ -5,18 +5,16 @@ FastAPI backend for the Interview Ready AI Claude-backed interview preparation w
 ## Setup
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+uv sync
 cp .env.example .env
-uvicorn app.main:app --reload
+uv run uvicorn app.main:app --reload
 ```
 
 ## Testing
 
 ```bash
 cd backend
-pytest
+uv run pytest
 ```
 
 The tests run offline: web fetches and LLM calls are replaced by fakes.
@@ -29,3 +27,13 @@ The tests run offline: web fetches and LLM calls are replaced by fakes.
 - Sessions are JSON files under `SESSION_STORE_PATH`; the retrieval index is JSON files under `CHROMA_PERSIST_DIR`.
 
 Each pipeline step falls back to a generic result if it fails. Failures are logged, and those the user should know about are returned in `metadata.warnings`.
+
+## Dependencies
+
+Dependencies are managed with [uv](https://docs.astral.sh/uv/). `pyproject.toml` lists the direct dependencies, `uv.lock` pins the exact version of every package, and `.python-version` sets the Python version (3.12). Commit all three.
+
+```bash
+uv add <package>        # add a runtime dependency
+uv add --dev <package>  # add a test or tooling dependency
+uv lock --upgrade       # move to the newest allowed versions, then run the tests
+```

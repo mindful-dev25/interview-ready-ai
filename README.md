@@ -27,12 +27,12 @@ frontend/  Next.js app shell and interview-prep UI components
 
 ```bash
 cd backend
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+uv sync
 cp .env.example .env
-uvicorn app.main:app --reload
+uv run uvicorn app.main:app --reload
 ```
+
+Dependencies are managed with [uv](https://docs.astral.sh/uv/). `uv sync` creates `backend/.venv` with the Python version in `.python-version` and the exact package versions in `uv.lock`.
 
 The backend runs at `http://localhost:8000` by default.
 
