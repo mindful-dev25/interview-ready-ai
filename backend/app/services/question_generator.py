@@ -1,7 +1,7 @@
 import json
 from typing import Any
 
-from app.core.llm import GroqLLMClient
+from app.core.llm import LLMClient
 from app.core.llm_json import coerce_str_list, coerce_text, parse_json_response
 from app.schemas import InterviewQuestion
 
@@ -15,10 +15,10 @@ _SYSTEM_PROMPT = (
 
 
 class QuestionGenerator:
-    """Generate tailored interview questions using Groq."""
+    """Generate tailored interview questions using the LLM."""
 
-    def __init__(self, llm_client: GroqLLMClient | None = None) -> None:
-        self.llm = llm_client or GroqLLMClient()
+    def __init__(self, llm_client: LLMClient | None = None) -> None:
+        self.llm = llm_client or LLMClient()
 
     async def generate_questions(
         self,

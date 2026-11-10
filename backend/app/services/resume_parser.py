@@ -1,7 +1,7 @@
 import re
 from typing import Any
 
-from app.core.llm import GroqLLMClient
+from app.core.llm import LLMClient
 from app.core.llm_json import coerce_list, coerce_text, parse_json_response
 
 MIN_WORD_COUNT = 75
@@ -34,10 +34,10 @@ _LIST_FIELDS = (
 
 
 class ResumeParser:
-    """Parse raw resume text into structured JSON using Groq."""
+    """Parse raw resume text into structured JSON using the LLM."""
 
-    def __init__(self, llm_client: GroqLLMClient | None = None) -> None:
-        self.llm = llm_client or GroqLLMClient()
+    def __init__(self, llm_client: LLMClient | None = None) -> None:
+        self.llm = llm_client or LLMClient()
 
     async def parse_text(self, resume_text: str) -> dict[str, Any]:
         cleaned_text = str(resume_text or "").strip()

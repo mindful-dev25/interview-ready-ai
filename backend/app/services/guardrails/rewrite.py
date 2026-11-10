@@ -1,6 +1,6 @@
 """Suggest a safer rewrite of an answer that failed a guardrail check."""
 
-from app.core.llm import GroqLLMClient, LLMGenerationError, LLMMalformedResponseError
+from app.core.llm import LLMClient, LLMGenerationError, LLMMalformedResponseError
 from app.schemas import CitationGuardrailResult, TruthfulnessGuardrailResult
 from app.services.guardrails.text import strip_citations
 
@@ -12,7 +12,7 @@ _SYSTEM_PROMPT = (
 
 
 class SafeRewriter:
-    def __init__(self, llm_client: GroqLLMClient) -> None:
+    def __init__(self, llm_client: LLMClient) -> None:
         self.llm = llm_client
 
     async def rewrite(

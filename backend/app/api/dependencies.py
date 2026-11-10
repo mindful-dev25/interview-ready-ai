@@ -6,7 +6,7 @@ them with ``app.dependency_overrides[get_x] = lambda: fake``.
 
 from functools import lru_cache
 
-from app.core.llm import GroqLLMClient
+from app.core.llm import LLMClient
 from app.services.analysis_pipeline import AnalysisPipeline
 from app.services.answer_drafter import AnswerDrafter
 from app.services.answer_reviser import AnswerReviser
@@ -21,9 +21,9 @@ from app.storage.session_store import SessionStore
 
 
 @lru_cache
-def get_llm_client() -> GroqLLMClient:
+def get_llm_client() -> LLMClient:
     """One client for every service, so they all reuse the same pooled connection."""
-    return GroqLLMClient()
+    return LLMClient()
 
 
 @lru_cache

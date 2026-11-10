@@ -1,6 +1,6 @@
 # Interview Ready AI Backend
 
-FastAPI backend for the Interview Ready AI Groq-backed interview preparation workflow.
+FastAPI backend for the Interview Ready AI Claude-backed interview preparation workflow.
 
 ## Setup
 

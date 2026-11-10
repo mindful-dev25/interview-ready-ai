@@ -13,9 +13,8 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
-    groq_api_key: str = ""
-    groq_base_url: str = "https://api.groq.com/openai/v1"
-    groq_chat_model: str = ""
+    anthropic_api_key: str = ""
+    claude_model: str = "claude-opus-5-5"
 
     chroma_persist_dir: str = "./chroma_db"
     session_store_path: str = "./sessions"

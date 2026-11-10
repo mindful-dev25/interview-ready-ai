@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from app.core.llm import GroqLLMClient, LLMGenerationError
+from app.core.llm import LLMClient, LLMGenerationError
 from app.schemas import (
     CompanyResearch,
     HumanReviewStatus,
@@ -41,8 +41,8 @@ def _bullets(items: list[str]) -> str:
 class ReportGenerator:
     """Generate a polished final report from approved interview answers."""
 
-    def __init__(self, llm_client: GroqLLMClient | None = None) -> None:
-        self.llm = llm_client or GroqLLMClient()
+    def __init__(self, llm_client: LLMClient | None = None) -> None:
+        self.llm = llm_client or LLMClient()
 
     async def generate(self, session: SessionState) -> str:
         approved_answers = [

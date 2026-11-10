@@ -5,7 +5,7 @@ from typing import Any
 import httpx
 from bs4 import BeautifulSoup, Comment
 
-from app.core.llm import GroqLLMClient, LLMGenerationError
+from app.core.llm import LLMClient, LLMGenerationError
 from app.core.llm_json import coerce_str_list, coerce_text, parse_json_response
 from app.core.prompts import truncate_for_prompt
 
@@ -40,8 +40,8 @@ class JobScraper:
     structured, empty job data is returned with a ``warning`` explaining why.
     """
 
-    def __init__(self, llm_client: GroqLLMClient | None = None, timeout: float = 20.0) -> None:
-        self.llm = llm_client or GroqLLMClient()
+    def __init__(self, llm_client: LLMClient | None = None, timeout: float = 20.0) -> None:
+        self.llm = llm_client or LLMClient()
         self.timeout = timeout
 
     async def scrape(self, job_url: str) -> dict[str, Any]:

@@ -1,4 +1,4 @@
-from app.core.llm import GroqLLMClient
+from app.core.llm import LLMClient
 from app.core.prompts import REVISION_PROMPT, SYSTEM_PROMPT
 from app.schemas import InterviewAnswer
 
@@ -6,8 +6,8 @@ from app.schemas import InterviewAnswer
 class AnswerReviser:
     """Rewrite a drafted answer according to the reviewer's notes."""
 
-    def __init__(self, llm_client: GroqLLMClient | None = None) -> None:
-        self.llm = llm_client or GroqLLMClient()
+    def __init__(self, llm_client: LLMClient | None = None) -> None:
+        self.llm = llm_client or LLMClient()
 
     async def revise(self, answer: InterviewAnswer, reviewer_notes: str) -> str:
         prompt = REVISION_PROMPT.format(

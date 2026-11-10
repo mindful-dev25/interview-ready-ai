@@ -3,7 +3,7 @@ import logging
 import re
 from typing import Any
 
-from app.core.llm import GroqLLMClient
+from app.core.llm import LLMClient
 from app.core.prompts import ANSWER_DRAFT_PROMPT
 from app.schemas import EvidenceItem, EvidenceSourceType, InterviewAnswer, InterviewQuestion
 from app.services.guardrails import GuardrailService
@@ -31,17 +31,17 @@ _CITATION = re.compile(r"\[([^\]]+)\]")
 
 
 class AnswerDrafter:
-    """Draft interview answers using RAG and Groq, optionally checking each with guardrails."""
+    """Draft interview answers using RAG and the LLM, optionally checking each with guardrails."""
 
     def __init__(
         self,
         rag_service: RAGService | None = None,
-        llm_client: GroqLLMClient | None = None,
+        llm_client: LLMClient | None = None,
         guardrails: GuardrailService | None = None,
         max_concurrency: int = MAX_CONCURRENT_DRAFTS,
     ) -> None:
         self.rag = rag_service or RAGService()
-        self.llm = llm_client or GroqLLMClient()
+        self.llm = llm_client or LLMClient()
         self.guardrails = guardrails
         self.max_concurrency = max(1, max_concurrency)
 

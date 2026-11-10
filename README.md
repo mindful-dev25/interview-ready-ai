@@ -1,6 +1,6 @@
 # Interview Ready AI
 
-Interview Ready AI is a Groq-backed, agentic RAG application for interview preparation. Users upload a resume and provide a job description URL, then the app drafts tailored interview answers with guardrails, evidence, and human-in-the-loop review before a final report is generated.
+Interview Ready AI is a Claude-backed, agentic RAG application for interview preparation. Users upload a resume and provide a job description URL, then the app drafts tailored interview answers with guardrails, evidence, and human-in-the-loop review before a final report is generated.
 
 <img width="1035" height="2214" alt="template" src="https://github.com/user-attachments/assets/0989fd8e-66f9-45d7-9d1e-5286d60ab1ae" />
 
@@ -8,7 +8,7 @@ Interview Ready AI is a Groq-backed, agentic RAG application for interview prepa
 
 - Backend: Python, FastAPI
 - Orchestration: an async analysis pipeline (scrape, parse, research, index, generate, draft, check)
-- LLM provider: Groq via OpenAI-compatible HTTP calls
+- LLM provider: Claude via the Anthropic Python SDK
 - Retrieval: local keyword index stored as JSON files
 - Frontend: Next.js, React, TypeScript
 - Styling: Tailwind CSS
@@ -36,9 +36,9 @@ uvicorn app.main:app --reload
 
 The backend runs at `http://localhost:8000` by default.
 
-Set `GROQ_API_KEY` and `GROQ_CHAT_MODEL` in `backend/.env` before using LLM generation. The backend uses Groq's OpenAI-compatible API at `https://api.groq.com/openai/v1` by default.
+Set `ANTHROPIC_API_KEY` in `backend/.env` before using LLM generation. Create the key in the Claude Console; a claude.ai subscription does not include API access. `CLAUDE_MODEL` selects the model and defaults to `claude-opus-5-5`.
 
-Note: Retrieval and session persistence are local, file-based services. LLM generation uses Groq, not Ollama.
+Note: Retrieval and session persistence are local, file-based services. LLM generation uses the Claude API.
 
 ### Frontend
 

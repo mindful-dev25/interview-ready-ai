@@ -32,7 +32,7 @@ def parse_json_response(text: str, *, expect: type, context: str) -> Any:
 
     if not isinstance(parsed, expect):
         kind = "object" if expect is dict else "array"
-        raise LLMMalformedResponseError(f"Groq did not return a valid JSON {kind} while {context}.")
+        raise LLMMalformedResponseError(f"The model did not return a valid JSON {kind} while {context}.")
     return parsed
 
 

@@ -20,7 +20,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.app_name,
         version="0.1.0",
-        description="Groq-backed RAG API for interview preparation.",
+        description="Claude-backed RAG API for interview preparation.",
         lifespan=lifespan,
     )
 

@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.core.llm import GroqLLMClient
+from app.core.llm import LLMClient
 from app.services.guardrails.checks import evaluate_citations, evaluate_truthfulness
 from app.services.guardrails.detectors import find_missing_citation_claims
 from app.services.guardrails.rewrite import SafeRewriter
@@ -10,8 +10,8 @@ from app.services.guardrails.text import extract_evidence_ids
 class GuardrailService:
     """Runs truthfulness and citation checks on an answer and suggests a safe rewrite."""
 
-    def __init__(self, llm_client: GroqLLMClient | None = None) -> None:
-        self.llm = llm_client or GroqLLMClient()
+    def __init__(self, llm_client: LLMClient | None = None) -> None:
+        self.llm = llm_client or LLMClient()
         self.rewriter = SafeRewriter(self.llm)
 
     async def review_answer(

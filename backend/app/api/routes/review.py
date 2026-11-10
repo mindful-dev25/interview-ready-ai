@@ -75,7 +75,7 @@ async def revise_answer(
     except LLMConfigurationError as exc:
         raise HTTPException(
             status_code=503,
-            detail=f"LLM not configured: {exc} — set GROQ_API_KEY and GROQ_CHAT_MODEL in backend/.env and restart the server.",
+            detail=f"LLM not configured: {exc} Restart the server after editing backend/.env.",
         ) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"LLM revision failed: {exc}") from exc

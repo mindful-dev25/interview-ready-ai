@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.core.llm import GroqLLMClient
+from app.core.llm import LLMClient
 from app.core.llm_json import coerce_str_list, coerce_text, parse_json_response
 from app.core.prompts import truncate_for_prompt
 
@@ -15,8 +15,8 @@ _LIST_FIELDS = ("products", "values", "recent_highlights", "interview_signals", 
 class CompanyResearchService:
     """Extract company research from job posting text."""
 
-    def __init__(self, llm_client: GroqLLMClient | None = None) -> None:
-        self.llm = llm_client or GroqLLMClient()
+    def __init__(self, llm_client: LLMClient | None = None) -> None:
+        self.llm = llm_client or LLMClient()
 
     async def research(self, company_name: str, job_page_text: str) -> dict[str, Any]:
         if not company_name or not company_name.strip():

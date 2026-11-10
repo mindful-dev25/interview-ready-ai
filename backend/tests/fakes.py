@@ -2,7 +2,7 @@
 
 
 class FakeLLM:
-    """Stands in for GroqLLMClient: returns a canned reply and records the prompts it was given."""
+    """Stands in for LLMClient: returns a canned reply and records the prompts it was given."""
 
     def __init__(self, reply: str = "ok") -> None:
         self.reply = reply
