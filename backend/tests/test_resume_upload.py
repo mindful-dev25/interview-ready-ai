@@ -1,17 +1,18 @@
 """Tests for uploading a PDF resume and getting its text back."""
 
+from io import BytesIO
+
 from fastapi.testclient import TestClient
+from pypdf import PdfReader
 
 from app.main import app
-from app.services.resume_pdf import MAX_RESUME_PDF_BYTES
+from app.services.resume_pdf import MAX_RESUME_PDF_BYTES, tidy_resume_text
 
 client = TestClient(app)
 
 
-def make_pdf(lines: list[str]) -> bytes:
-    """Build a small one-page PDF showing the given lines, without needing a PDF-writing library."""
-    shown = " ".join(f"({line}) Tj T*" for line in lines)
-    content = f"BT /F1 12 Tf 72 720 Td 14 TL {shown} ET".encode()
+def build_pdf(content: bytes) -> bytes:
+    """Wrap a page content stream in a minimal one-page PDF, without needing a PDF-writing library."""
     objects = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
@@ -33,6 +34,28 @@ def make_pdf(lines: list[str]) -> bytes:
     return bytes(pdf)
 
 
+def make_pdf(lines: list[str]) -> bytes:
+    """A PDF that shows each line with one text operation, the way most PDF writers do."""
+    shown = " ".join(f"({line}) Tj T*" for line in lines)
+    return build_pdf(f"BT /F1 12 Tf 72 720 Td 14 TL {shown} ET".encode())
+
+
+def make_google_docs_style_pdf(lines: list[str]) -> bytes:
+    """A PDF laid out like a Google Docs export.
+
+    The page is flipped, and every word and every space is its own text block
+    that first resets the position to the origin and then moves to the word.
+    """
+    blocks = ["1 0 0 -1 0 792 cm"]
+    for row, line in enumerate(lines):
+        x = 72.0
+        y = 80 + row * 16
+        for piece in line.replace(" ", "\n \n").split("\n"):
+            blocks.append(f"BT /F1 12 Tf 1 0 0 -1 0 0 Tm {x:.1f} {-y} Td ({piece}) Tj ET")
+            x += 3.3 if piece == " " else 6.2 * len(piece)
+    return build_pdf("\n".join(blocks).encode())
+
+
 def upload(content: bytes, filename: str = "resume.pdf", content_type: str = "application/pdf"):
     return client.post("/api/resume/extract", files={"file": (filename, content, content_type)})
 
@@ -45,6 +68,24 @@ def test_extract_returns_the_text_of_a_pdf_resume():
     assert body["filename"] == "resume.pdf"
     assert body["page_count"] == 1
     assert body["text"].splitlines() == ["Jane Doe", "Senior Engineer at Example Corp", "Skills: Python, FastAPI"]
+
+
+def test_extract_keeps_lines_together_in_a_google_docs_style_pdf():
+    lines = ["Jane Doe", "Senior AI Engineer", "Saved $200K in annual revenue"]
+    pdf = make_google_docs_style_pdf(lines)
+    # Without help, the PDF library puts every word of such a file on its own line.
+    assert len(PdfReader(BytesIO(pdf)).pages[0].extract_text().split("\n")) > 3 * len(lines)
+
+    response = upload(pdf)
+
+    assert response.status_code == 200
+    assert response.json()["text"].splitlines() == lines
+
+
+def test_tidy_resume_text_cleans_up_extraction_artifacts():
+    raw = "Jane  Doe \r\nBuilt workﬂows for ﬁnance , saving $200K .\n\n\n\n●  Led a team"
+
+    assert tidy_resume_text(raw) == "Jane Doe\nBuilt workflows for finance, saving $200K.\n\n● Led a team"
 
 
 def test_extract_rejects_a_file_that_is_not_a_pdf():
