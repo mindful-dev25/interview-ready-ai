@@ -13,6 +13,7 @@ import { useResumeInput } from "@/lib/hooks/useResumeInput";
 
 export default function Home() {
   const [jobUrl, setJobUrl] = useState("");
+  const [jobText, setJobText] = useState("");
   const resume = useResumeInput();
   const session = useInterviewSession();
   const { revision, report, reviewCounts } = session;
@@ -26,25 +27,38 @@ export default function Home() {
           </h1>
         </header>
 
-        <section className="grid gap-4 md:grid-cols-[1fr_1fr]">
-          <ResumeUpload
-            resumeText={resume.resumeText}
-            fileName={resume.resumeFileName}
-            onTextChange={resume.setResumeText}
-            onFileChange={resume.handleFileChange}
-            fileError={resume.fileError}
-            isReadingFile={resume.isReadingFile}
-          />
-          <JobUrlInput
-            jobUrl={jobUrl}
-            onJobUrlChange={setJobUrl}
-            onSubmit={() => session.analyze(jobUrl, resume.resumeText)}
-            isLoading={session.loading}
-            disabled={resume.isReadingFile}
-          />
+        <section className="flex flex-col gap-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <ResumeUpload
+              resumeText={resume.resumeText}
+              fileName={resume.resumeFileName}
+              onTextChange={resume.setResumeText}
+              onFileChange={resume.handleFileChange}
+              fileError={resume.fileError}
+              isReadingFile={resume.isReadingFile}
+            />
+            <JobUrlInput jobUrl={jobUrl} onJobUrlChange={setJobUrl} jobText={jobText} onJobTextChange={setJobText} />
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => session.analyze(jobUrl, resume.resumeText, jobText)}
+              // Also blocked while a resume file is still being read, so it is not left out of the analysis.
+              disabled={session.loading || resume.isReadingFile}
+              className="min-h-11 w-full rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+            >
+              {session.loading ? "Analyzing..." : "Analyze"}
+            </button>
+          </div>
         </section>
 
-        <AnalysisProgress status={session.analysisStatus} />
+        <AnalysisProgress status={session.analysisStatus} progress={session.progress} />
+
+        {session.analysisError && (
+          <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            {session.analysisError}
+          </div>
+        )}
 
         {session.warnings.length > 0 && (
           <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
@@ -63,10 +77,12 @@ export default function Home() {
                 <p className="text-sm text-muted-foreground">No answer drafts yet. Start analysis to generate questions and answer drafts.</p>
               </div>
             ) : (
-              session.answers.map((answer) => (
+              session.answers.map((answer, index) => (
                 <AnswerReviewCard
                   key={answer.id}
                   answer={answer}
+                  number={index + 1}
+                  evidence={session.evidenceIndex}
                   isRevising={revision.answerId === answer.id}
                   revisionNotes={revision.notes}
                   revisionLoading={revision.loading}
@@ -90,6 +106,8 @@ export default function Home() {
               onGenerateReport={session.generateReport}
               reportReady={report.ready}
               reportLoading={report.loading}
+              onApproveAll={session.approveAll}
+              approvingAll={session.approvingAll}
             />
             <FinalReport
               markdown={report.markdown ?? undefined}

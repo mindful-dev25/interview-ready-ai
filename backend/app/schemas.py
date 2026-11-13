@@ -51,7 +51,10 @@ class AnalyzeRequestMetadata(BaseModel):
 
 
 class AnalyzeRequest(BaseModel):
-    job_url: str
+    job_url: str = ""
+    # Job description pasted by the user. When present it is used instead of fetching job_url,
+    # for sites that block automated access or need a login.
+    job_text: str | None = None
     resume_text: str | None = None
     resume_filename: str | None = None
     metadata: AnalyzeRequestMetadata = Field(default_factory=AnalyzeRequestMetadata)

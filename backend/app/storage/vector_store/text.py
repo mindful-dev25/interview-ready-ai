@@ -54,23 +54,38 @@ def chunk_text(text: str) -> list[str]:
     current = ""
 
     for paragraph in paragraphs:
-        for part in _split_long_text(paragraph):
+        for index, part in enumerate(_split_long_text(paragraph)):
+            # Pieces of one paragraph are rejoined with a space; separate paragraphs keep their blank line.
+            separator = " " if index > 0 else "\n\n"
             if not current:
                 current = part
-            elif len(current) + len(part) + 2 <= MAX_CHUNK_CHARS:
-                current = f"{current}\n\n{part}"
+            elif len(current) + len(part) + len(separator) <= MAX_CHUNK_CHARS:
+                current = f"{current}{separator}{part}"
             else:
                 chunks.append(current)
-                overlap = current[-CHUNK_OVERLAP_CHARS:].strip()
-                current = f"{overlap}\n\n{part}" if overlap else part
+                overlap = _tail_overlap(current)
+                current = f"{overlap}{separator}{part}" if overlap else part
 
     if current:
         chunks.append(current)
     return chunks
 
 
+def _tail_overlap(chunk: str) -> str:
+    """The end of a chunk, repeated at the start of the next so text cut at the boundary keeps its context."""
+    if len(chunk) <= CHUNK_OVERLAP_CHARS:
+        return chunk.strip()
+    tail = chunk[-CHUNK_OVERLAP_CHARS:]
+    # Start at a word boundary, so the next chunk does not open with half a word.
+    first_space = tail.find(" ")
+    return tail[first_space + 1 :].strip() if first_space != -1 else tail.strip()
+
+
 def _split_long_text(text: str) -> list[str]:
-    """Split a single oversized paragraph on word boundaries, with overlap."""
+    """Split a single oversized paragraph on word boundaries.
+
+    The parts do not overlap; ``chunk_text`` adds the overlap between chunks.
+    """
     if len(text) <= MAX_CHUNK_CHARS:
         return [text]
 
@@ -81,8 +96,7 @@ def _split_long_text(text: str) -> list[str]:
         if split_at < MAX_CHUNK_CHARS // 2:
             split_at = MAX_CHUNK_CHARS
         parts.append(remaining[:split_at].strip())
-        overlap_start = max(split_at - CHUNK_OVERLAP_CHARS, 0)
-        remaining = remaining[overlap_start:].strip()
+        remaining = remaining[split_at:].strip()
 
     if remaining:
         parts.append(remaining)

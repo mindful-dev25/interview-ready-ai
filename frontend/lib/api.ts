@@ -1,5 +1,7 @@
 import type {
+  AnalysisProgressUpdate,
   AnalysisResponse,
+  AnalysisStreamEvent,
   FinalReportResponse,
   ResumeTextResponse,
   ReviewAction,
@@ -28,12 +30,14 @@ async function request<T>(path: string, fallbackError: string, body?: unknown): 
           };
 
   const response = await fetch(`${API_BASE_URL}${path}`, init);
-  if (!response.ok) {
-    const payload = await response.json().catch(() => null);
-    const detail = payload?.detail;
-    throw new Error(typeof detail === "string" && detail ? detail : fallbackError);
-  }
+  if (!response.ok) throw await errorFrom(response, fallbackError);
   return response.json();
+}
+
+async function errorFrom(response: Response, fallbackError: string): Promise<Error> {
+  const payload = await response.json().catch(() => null);
+  const detail = payload?.detail;
+  return new Error(typeof detail === "string" && detail ? detail : fallbackError);
 }
 
 export function extractResumeText(file: File): Promise<ResumeTextResponse> {
@@ -42,11 +46,45 @@ export function extractResumeText(file: File): Promise<ResumeTextResponse> {
   return request("/resume/extract", "Failed to read the PDF resume.", form);
 }
 
-export function startAnalysis(jobUrl: string, resumeText?: string): Promise<AnalysisResponse> {
-  return request("/analysis", "Failed to start interview analysis.", {
-    job_url: jobUrl,
-    resume_text: resumeText,
+/**
+ * Run an analysis, calling `onProgress` as the backend reports each step.
+ * A pasted job description, when given, is used instead of fetching the URL.
+ *
+ * The response body is newline-delimited JSON: progress events, then one
+ * result or error event.
+ */
+export async function startAnalysis(
+  input: { jobUrl: string; resumeText?: string; jobText?: string },
+  onProgress: (update: AnalysisProgressUpdate) => void,
+): Promise<AnalysisResponse> {
+  const fallbackError = "Failed to start interview analysis.";
+  const response = await fetch(`${API_BASE_URL}/analysis/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ job_url: input.jobUrl, job_text: input.jobText, resume_text: input.resumeText }),
   });
+  if (!response.ok || !response.body) throw await errorFrom(response, fallbackError);
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffered = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    buffered += decoder.decode(value, { stream: !done });
+
+    // A network chunk can end mid-line, so only complete lines are parsed; the rest waits for more data.
+    const lines = buffered.split("\n");
+    buffered = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const event = JSON.parse(line) as AnalysisStreamEvent;
+      if (event.type === "progress") onProgress(event);
+      else if (event.type === "result") return event.data;
+      else throw new Error(event.detail || fallbackError);
+    }
+    if (done) break;
+  }
+  throw new Error("The analysis stopped before a result arrived.");
 }
 
 export function reviewAnswer(

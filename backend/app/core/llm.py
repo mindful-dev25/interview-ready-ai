@@ -101,6 +101,10 @@ class LLMClient:
 
         return self._text_from(response)
 
+    def ensure_configured(self) -> None:
+        """Raise LLMConfigurationError now if a request could not be sent, instead of at the first call."""
+        self._validated_config()
+
     async def aclose(self) -> None:
         """Close the pooled HTTP connections, if any were opened."""
         if self._client is not None:

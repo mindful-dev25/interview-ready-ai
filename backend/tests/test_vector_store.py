@@ -1,7 +1,7 @@
 import asyncio
 
 from app.storage.vector_store import VectorStore
-from app.storage.vector_store.text import CHUNK_OVERLAP_CHARS, MAX_CHUNK_CHARS
+from app.storage.vector_store.text import CHUNK_OVERLAP_CHARS, MAX_CHUNK_CHARS, chunk_text
 
 DOCUMENTS = [
     {"content": "Built Python APIs with FastAPI and PostgreSQL.", "source_type": "resume", "source": "Resume"},
@@ -56,3 +56,27 @@ def test_long_text_is_split_into_overlapping_chunks(tmp_path):
     longest_allowed = MAX_CHUNK_CHARS + CHUNK_OVERLAP_CHARS + len("\n\n")
     assert len(results) > 1
     assert all(len(result["quote"]) <= longest_allowed for result in results)
+
+
+def test_chunks_of_one_long_paragraph_repeat_only_the_overlap_once():
+    # Every word is different, so any word appearing twice in a chunk means text was duplicated.
+    words = [f"word{number}" for number in range(600)]
+
+    chunks = chunk_text(" ".join(words))
+
+    assert len(chunks) > 1
+    for chunk in chunks:
+        chunk_words = chunk.split()
+        assert len(chunk_words) == len(set(chunk_words))
+        # Chunks start and end on whole words, never in the middle of one.
+        assert set(chunk_words) <= set(words)
+    assert {word for chunk in chunks for word in chunk.split()} == set(words)
+    # Each chunk opens with the last few words of the one before it.
+    for previous, following in zip(chunks, chunks[1:]):
+        shared = [word for word in following.split() if word in set(previous.split())]
+        assert shared and following.split()[: len(shared)] == shared
+        assert previous.endswith(" ".join(shared))
+
+
+def test_separate_paragraphs_keep_their_blank_line_inside_a_chunk():
+    assert chunk_text("First paragraph.\n\nSecond paragraph.") == ["First paragraph.\n\nSecond paragraph."]

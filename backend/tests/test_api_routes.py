@@ -1,117 +1,12 @@
-"""End-to-end API tests. Every external call (web fetch, LLM) is replaced by a fake."""
+"""End-to-end API tests. Every external call (web fetch, LLM) is replaced by a fake (see conftest.py)."""
 
-import pytest
 from fastapi.testclient import TestClient
-from fakes import FakeLLM
+from fakes import EXPECTED_ANSWER_COUNT, JOB_PAGE_TEXT, RESUME_TEXT
 
-from app.api.dependencies import (
-    get_analysis_pipeline,
-    get_answer_reviser,
-    get_report_generator,
-    get_session_store,
-)
+from app.api.dependencies import get_llm_client
+from app.core.llm import LLMClient
 from app.main import app
-from app.schemas import HumanReviewStatus, InterviewQuestion, SessionState
-from app.services.analysis_pipeline import AnalysisPipeline
-from app.services.answer_drafter import AnswerDrafter
-from app.services.guardrails import GuardrailService
-from app.services.rag import RAGService
-from app.services.report_generator import ReportGenerator
-from app.storage.session_store import SessionStore
-from app.storage.vector_store import VectorStore
-
-DRAFT_REPLY = "- Draft Answer: I enjoy solving problems with clear, well tested code.\n- Evidence Used: none"
-RESUME_TEXT = "Summary: engineer. Experience: built APIs. Skills: Python. Education: B.S. Computer Science."
-GENERATED_QUESTION_COUNT = 3
-# Two fixed openers, the generated questions, and one fixed closer.
-EXPECTED_ANSWER_COUNT = GENERATED_QUESTION_COUNT + 3
-
-
-class FakeScraper:
-    def __init__(self) -> None:
-        self.warning: str | None = None
-
-    async def scrape(self, job_url: str) -> dict:
-        return {
-            "title": "Software Engineer",
-            "company": "Example Corp",
-            "location": "Remote",
-            "responsibilities": ["Build and maintain APIs."],
-            "required_skills": ["Python"],
-            "preferred_skills": [],
-            "keywords": [],
-            "raw_text": "Example Corp is hiring a Software Engineer to build and maintain APIs.",
-            "warning": self.warning,
-        }
-
-
-class FakeResumeParser:
-    async def parse_text(self, resume_text: str) -> dict:
-        return {"candidate_summary": "Engineer", "skills": ["Python"]}
-
-
-class FakeCompanyResearch:
-    async def research(self, company_name: str, job_page_text: str) -> dict:
-        return {"company_name": company_name, "summary": "Builds developer tools.", "values": ["Ownership"]}
-
-
-class FakeQuestionGenerator:
-    async def generate_questions(self, **kwargs) -> list[InterviewQuestion]:
-        return [
-            InterviewQuestion(id=f"generated-{i}", question=f"Tailored question {i}?")
-            for i in range(GENERATED_QUESTION_COUNT)
-        ]
-
-
-class ReviserThatApprovesAnotherAnswerMeanwhile:
-    """Simulates a user approving answer a1 while the LLM is still revising another answer."""
-
-    def __init__(self, store: SessionStore) -> None:
-        self.store = store
-
-    async def revise(self, answer, reviewer_notes: str) -> str:
-        session_id = self.session_id
-        session = SessionState.model_validate(await self.store.load(session_id))
-        session.answers[0].human_status = HumanReviewStatus.approved
-        await self.store.save(session_id, session)
-        return "A revised answer."
-
-
-@pytest.fixture
-def scraper() -> FakeScraper:
-    return FakeScraper()
-
-
-@pytest.fixture
-def reviser(tmp_path) -> ReviserThatApprovesAnotherAnswerMeanwhile:
-    return ReviserThatApprovesAnotherAnswerMeanwhile(SessionStore(path=str(tmp_path / "sessions")))
-
-
-@pytest.fixture
-def client(tmp_path, monkeypatch, scraper, reviser) -> TestClient:
-    rag = RAGService(VectorStore(persist_dir=str(tmp_path / "index")))
-    llm = FakeLLM(DRAFT_REPLY)
-    pipeline = AnalysisPipeline(
-        job_scraper=scraper,
-        resume_parser=FakeResumeParser(),
-        company_research_service=FakeCompanyResearch(),
-        rag_service=rag,
-        question_generator=FakeQuestionGenerator(),
-        answer_drafter=AnswerDrafter(
-            rag_service=rag, llm_client=llm, guardrails=GuardrailService(llm_client=llm)
-        ),
-    )
-    report_generator = ReportGenerator(llm_client=FakeLLM("# Final report"))
-
-    overrides = {
-        get_session_store: lambda: reviser.store,
-        get_analysis_pipeline: lambda: pipeline,
-        get_answer_reviser: lambda: reviser,
-        get_report_generator: lambda: report_generator,
-    }
-    for dependency, provider in overrides.items():
-        monkeypatch.setitem(app.dependency_overrides, dependency, provider)
-    return TestClient(app)
+from app.services.job_scraper import JobFetchError
 
 
 def start_analysis(client: TestClient) -> dict:
@@ -120,6 +15,56 @@ def start_analysis(client: TestClient) -> dict:
     )
     assert response.status_code == 200, response.text
     return response.json()
+
+
+def test_analysis_uses_a_pasted_job_description_instead_of_fetching(client, scraper):
+    response = client.post(
+        "/api/analysis",
+        json={"job_url": "example.com/job", "job_text": "  We are hiring a Software Engineer.  ", "resume_text": RESUME_TEXT},
+    )
+
+    assert response.status_code == 200, response.text
+    assert scraper.parsed_texts == ["We are hiring a Software Engineer."]
+    assert scraper.fetched_urls == []
+    assert response.json()["metadata"]["job_url"] == "https://example.com/job"
+
+
+def test_analysis_accepts_a_pasted_job_description_without_a_url(client, scraper):
+    response = client.post("/api/analysis", json={"job_text": "We are hiring a Software Engineer."})
+
+    assert response.status_code == 200, response.text
+    assert scraper.fetched_urls == []
+    assert len(response.json()["answers"]) == EXPECTED_ANSWER_COUNT
+
+
+def test_analysis_requires_a_job_url_or_a_pasted_description(client, scraper):
+    response = client.post("/api/analysis", json={"job_url": "  ", "job_text": "  ", "resume_text": RESUME_TEXT})
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "A job URL or a pasted job description is required."
+    assert scraper.fetched_urls == [] and scraper.parsed_texts == []
+
+
+def test_analysis_stops_before_any_llm_work_when_the_job_page_cannot_be_read(client, scraper):
+    scraper.fetch_error = JobFetchError("The job site refused automated access (HTTP 406). Paste it instead.")
+    llm = app.dependency_overrides[get_llm_client]()
+
+    response = client.post("/api/analysis", json={"job_url": "example.com/job", "resume_text": RESUME_TEXT})
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "The job site refused automated access (HTTP 406). Paste it instead."
+    assert scraper.fetched_urls == ["https://example.com/job"]
+    assert scraper.parsed_texts == []
+    assert llm.prompts == []
+
+
+def test_analysis_is_refused_when_the_llm_has_no_api_key(client, monkeypatch):
+    monkeypatch.setitem(app.dependency_overrides, get_llm_client, lambda: LLMClient(api_key="", model="test-model"))
+
+    response = client.post("/api/analysis", json={"job_url": "example.com/job", "resume_text": RESUME_TEXT})
+
+    assert response.status_code == 503
+    assert "ANTHROPIC_API_KEY" in response.json()["detail"]
 
 
 def review(client: TestClient, session_id: str, answer_id: str, action: str = "approve") -> dict:
@@ -143,12 +88,19 @@ def test_analysis_drafts_an_answer_for_every_question(client):
     assert data["metadata"]["warnings"] == []
 
 
-def test_analysis_reports_scraper_fallback_as_a_warning(client, scraper):
-    scraper.warning = "Failed to fetch job posting: HTTP 404."
+def test_analysis_reads_the_job_page_when_no_description_is_pasted(client, scraper):
+    start_analysis(client)
+
+    assert scraper.fetched_urls == ["https://example.com/job"]
+    assert scraper.parsed_texts == [JOB_PAGE_TEXT]
+
+
+def test_analysis_reports_a_job_parsing_fallback_as_a_warning(client, scraper):
+    scraper.warning = "The job posting could not be analyzed in detail, so questions may be generic."
 
     data = start_analysis(client)
 
-    assert data["metadata"]["warnings"] == ["Failed to fetch job posting: HTTP 404."]
+    assert data["metadata"]["warnings"] == [scraper.warning]
 
 
 def test_review_returns_the_session_status(client):

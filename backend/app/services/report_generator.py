@@ -9,6 +9,7 @@ from app.schemas import (
     JobRequirements,
     SessionState,
 )
+from app.services.report_markdown import tidy_report_markdown
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ class ReportGenerator:
                 prompt=self._build_report_prompt(context), system_prompt=_SYSTEM_PROMPT
             )
             if markdown.strip():
-                return markdown.strip()
+                return tidy_report_markdown(markdown)
         except (LLMGenerationError, ValueError):
             logger.warning("LLM report generation failed; using the template report.", exc_info=True)
 
@@ -141,7 +142,10 @@ class ReportGenerator:
         return (
             "Create a polished markdown final report using only the approved answers and context below. "
             "Do not invent new candidate details or include any draft answers that were not approved or edited. "
-            "Organize the report with clear headings and concise sections.\n\n"
+            "Organize the report with clear headings and concise sections.\n"
+            "It is shown in a narrow panel, so use only headings, short paragraphs and bullet lists: "
+            "no markdown tables and no HTML tags such as <br>. For the candidate background, give each role "
+            "a bold line like **Role · Company · Period** followed by a bullet list of its key evidence.\n\n"
             f"Target Role: {context['target_role']}\n"
             f"Target Company: {context['target_company']}\n\n"
             f"Job Summary:\n{context['job_summary']}\n\n"

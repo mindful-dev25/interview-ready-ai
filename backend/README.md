@@ -21,13 +21,14 @@ The tests run offline: web fetches and LLM calls are replaced by fakes.
 
 ## What It Does
 
-- `POST /api/analysis` runs the pipeline in `app/services/analysis_pipeline.py`: scrape the job posting, parse the resume, research the company, index the context, generate questions, then draft an answer per question. Drafts run concurrently and each is checked by the guardrail heuristics in `app/services/guardrails/`.
+- `POST /api/analysis` runs the pipeline in `app/services/analysis_pipeline.py`: scrape the job posting (or use a job description pasted in `job_text`, for sites that block automated access), parse the resume, research the company, index the context, generate questions, then draft an answer per question. Drafts run concurrently and each is checked by the guardrail heuristics in `app/services/guardrails/`.
+- `POST /api/analysis/stream` runs the same pipeline but reports progress while it works. The response is newline-delimited JSON: `progress` events with a percent and a message, then one `result` (the `POST /api/analysis` payload) or `error` event. The frontend uses this endpoint.
 - `POST /api/resume/extract` turns an uploaded PDF resume (up to 5 MB) into text, which the frontend puts in the resume box for review before analysis. Scanned PDFs without a text layer are rejected with an explanation.
 - `POST /api/review` and `POST /api/revision` record human review of each answer.
 - `GET /api/report/{session_id}` generates the final report once every answer is approved or edited.
 - Sessions are JSON files under `SESSION_STORE_PATH`; the retrieval index is JSON files under `CHROMA_PERSIST_DIR`.
 
-Each pipeline step falls back to a generic result if it fails. Failures are logged, and those the user should know about are returned in `metadata.warnings`.
+A job page that cannot be read (blocked, missing, or needing a login) stops the analysis before any LLM call, with a message asking for the job description to be pasted instead. Every later pipeline step falls back to a generic result if it fails. Failures are logged, and those the user should know about are returned in `metadata.warnings`.
 
 ## Dependencies
 

@@ -3,43 +3,47 @@ import { Link } from "lucide-react";
 type JobUrlInputProps = {
   jobUrl: string;
   onJobUrlChange: (value: string) => void;
-  onSubmit: () => void;
-  isLoading: boolean;
-  /** Blocks submitting without showing the loading label, e.g. while a resume file is still being read. */
-  disabled?: boolean;
+  jobText: string;
+  onJobTextChange: (value: string) => void;
 };
 
-export default function JobUrlInput({ jobUrl, onJobUrlChange, onSubmit, isLoading, disabled = false }: JobUrlInputProps) {
+export default function JobUrlInput({ jobUrl, onJobUrlChange, jobText, onJobTextChange }: JobUrlInputProps) {
   return (
-    <section className="rounded-lg border border-border bg-white p-5 shadow-sm">
+    <section className="flex flex-col rounded-lg border border-border bg-white p-5 shadow-sm">
       <div className="flex items-center gap-3">
-        <div className="flex size-10 items-center justify-center rounded-md bg-muted">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
           <Link className="size-5 text-primary" aria-hidden="true" />
         </div>
         <div>
-          <h2 className="text-lg font-semibold">Job URL</h2>
+          <h2 className="text-lg font-semibold">Job posting</h2>
           <p className="text-sm text-muted-foreground">
-            Paste the job posting URL for the target role, so the assistant can tailor answers.
+            Paste the job posting URL or the job description, so the answers are tailored to the role.
           </p>
         </div>
       </div>
-      <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-        <input
-          className="min-h-11 flex-1 rounded-md border border-border bg-white px-3 text-sm outline-none ring-primary/25 transition focus:ring-4"
-          placeholder="https://company.com/careers/software-engineer"
-          type="url"
-          value={jobUrl}
-          onChange={(event) => onJobUrlChange(event.target.value)}
-        />
-        <button
-          type="button"
-          onClick={onSubmit}
-          disabled={isLoading || disabled}
-          className="min-h-11 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isLoading ? "Analyzing..." : "Analyze"}
-        </button>
-      </div>
+
+      <input
+        className="mt-4 min-h-11 w-full rounded-md border border-border bg-white px-3 text-sm outline-none ring-primary/25 transition focus:ring-4"
+        placeholder="https://company.com/careers/software-engineer"
+        type="url"
+        aria-label="Job posting URL"
+        value={jobUrl}
+        onChange={(event) => onJobUrlChange(event.target.value)}
+      />
+
+      <label className="mt-4 block text-sm font-medium" htmlFor="job-description">
+        Or paste the job description
+      </label>
+      <p className="text-sm text-muted-foreground">
+        Used instead of the URL, for sites that block automated access.
+      </p>
+      <textarea
+        id="job-description"
+        className="mt-2 min-h-[9rem] w-full flex-1 rounded-md border border-border bg-white px-3 py-3 text-sm outline-none ring-primary/25 transition focus:ring-4"
+        placeholder="Paste the full job description here..."
+        value={jobText}
+        onChange={(event) => onJobTextChange(event.target.value)}
+      />
     </section>
   );
 }

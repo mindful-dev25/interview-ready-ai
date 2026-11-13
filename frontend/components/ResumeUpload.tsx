@@ -18,28 +18,21 @@ export default function ResumeUpload({
   isReadingFile = false,
 }: ResumeUploadProps) {
   return (
-    <section className="rounded-lg border border-border bg-white p-5 shadow-sm">
+    <section className="flex flex-col rounded-lg border border-border bg-white p-5 shadow-sm">
       <div className="flex items-center gap-3">
-        <div className="flex size-10 items-center justify-center rounded-md bg-muted">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
           <Upload className="size-5 text-primary" aria-hidden="true" />
         </div>
         <div>
           <h2 className="text-lg font-semibold">Resume</h2>
           <p className="text-sm text-muted-foreground">
-            Paste resume text or upload a PDF or plain text file to ground the answer generation.
+            Upload your resume or paste its text, so the answers are grounded in your experience.
           </p>
         </div>
       </div>
 
-      <textarea
-        className="mt-4 min-h-[6rem] w-full rounded-md border border-border bg-white px-3 py-3 text-sm outline-none ring-primary/25 transition focus:ring-4"
-        placeholder="Paste your resume text here..."
-        value={resumeText}
-        onChange={(event) => onTextChange(event.target.value)}
-      />
-
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <label className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-md border border-dashed border-border bg-muted/40 px-4 text-sm font-medium text-muted-foreground transition hover:border-primary">
+      <div className="mt-4 flex min-h-11 items-center gap-3">
+        <label className="inline-flex min-h-11 shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed border-border bg-muted/40 px-4 text-sm font-medium text-muted-foreground transition hover:border-primary">
           <input
             className="sr-only"
             type="file"
@@ -53,11 +46,25 @@ export default function ResumeUpload({
           Upload resume (PDF or text)
         </label>
         {fileName ? (
-          <span className="text-sm text-muted-foreground" role="status">
+          <span className="min-w-0 truncate text-sm text-muted-foreground" role="status">
             {isReadingFile ? `Reading ${fileName}...` : fileName}
           </span>
         ) : null}
       </div>
+
+      <label className="mt-4 block text-sm font-medium" htmlFor="resume-text">
+        Or paste the resume text
+      </label>
+      <p className="text-sm text-muted-foreground">
+        Text from an uploaded file appears here for you to check and edit.
+      </p>
+      <textarea
+        id="resume-text"
+        className="mt-2 min-h-[9rem] w-full flex-1 rounded-md border border-border bg-white px-3 py-3 text-sm outline-none ring-primary/25 transition focus:ring-4"
+        placeholder="Paste your resume text here..."
+        value={resumeText}
+        onChange={(event) => onTextChange(event.target.value)}
+      />
 
       {fileError ? <p className="mt-2 text-sm text-red-700">{fileError}</p> : null}
     </section>

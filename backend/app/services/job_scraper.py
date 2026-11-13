@@ -23,54 +23,65 @@ _USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
 )
+# Statuses sites use to turn away automated clients; retrying or changing the URL will not help.
+_REFUSED_STATUS_CODES = {401, 403, 406, 429}
+_PASTE_INSTEAD = "Paste the job description into the box under the URL and analyze again."
 _SYSTEM_PROMPT = (
     "You are a job posting parser. Extract structured job requirements exactly as valid JSON. "
     "Do not add any extra text or markdown."
 )
 
 
-class JobFetchError(Exception):
-    """Raised when the job posting URL cannot be fetched from the remote server."""
+class JobFetchError(ValueError):
+    """Raised with a user-facing message when the job page cannot be read."""
 
 
 class JobScraper:
-    """Fetch and normalize job descriptions from career pages.
+    """Read job postings from career pages and turn their text into structured data.
 
-    Scraping never fails the analysis: when the page can't be fetched or
-    structured, empty job data is returned with a ``warning`` explaining why.
+    Reading the page fails loudly (``fetch_text`` raises ``JobFetchError``), because
+    without the posting the whole analysis would be generic. Structuring the text
+    never fails: if the LLM reply is unusable, empty job data is returned with a
+    ``warning`` explaining why.
     """
 
     def __init__(self, llm_client: LLMClient | None = None, timeout: float = 20.0) -> None:
         self.llm = llm_client or LLMClient()
         self.timeout = timeout
 
-    async def scrape(self, job_url: str) -> dict[str, Any]:
+    async def fetch_text(self, job_url: str) -> str:
+        """Return the readable text of the job page, or raise JobFetchError saying what to do instead."""
         url = str(job_url)
         try:
             html = await self._fetch_html(url)
         except JobFetchError as exc:
             logger.warning("Job posting fetch failed for %s: %s", url, exc)
-            return self._empty_job_data(
-                warning=f"{exc} Questions are not tailored to this posting."
-            )
+            raise JobFetchError(f"{exc} {_PASTE_INSTEAD}") from exc
 
         text = self._extract_readable_text(html)
         if len(text.split()) < MIN_JOB_TEXT_WORDS:
+            logger.warning("Job page %s had too little readable text.", url)
+            raise JobFetchError(
+                f"The job page had too little readable text (it may need a login or JavaScript). {_PASTE_INSTEAD}"
+            )
+        return text
+
+    async def parse_text(self, job_text: str, job_url: str = "") -> dict[str, Any]:
+        """Structure job description text, whether read from the page or pasted by the user."""
+        text = _WHITESPACE.sub(" ", job_text).strip()
+        if len(text.split()) < MIN_JOB_TEXT_WORDS:
             return self._empty_job_data(
                 text,
-                warning=(
-                    "The job page had too little readable text (it may need a login or JavaScript). "
-                    "Questions are not tailored to this posting."
-                ),
+                warning="The job description is too short to analyze, so questions may be generic.",
             )
 
         try:
             raw_json = await self.llm.generate(
-                prompt=self._build_prompt(text, url), system_prompt=_SYSTEM_PROMPT
+                prompt=self._build_prompt(text, job_url), system_prompt=_SYSTEM_PROMPT
             )
             parsed = parse_json_response(raw_json, expect=dict, context="structuring the job posting")
         except LLMGenerationError as exc:
-            logger.warning("Could not structure job posting %s: %s", url, exc)
+            logger.warning("Could not structure job posting %s: %s", job_url or "(pasted)", exc)
             return self._empty_job_data(
                 text,
                 warning="The job posting could not be analyzed in detail, so questions may be generic.",
@@ -84,9 +95,10 @@ class JobScraper:
                 response = await client.get(url, headers={"User-Agent": _USER_AGENT})
                 response.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            raise JobFetchError(
-                f"Failed to fetch job posting: HTTP {exc.response.status_code}."
-            ) from exc
+            status = exc.response.status_code
+            if status in _REFUSED_STATUS_CODES:
+                raise JobFetchError(f"The job site refused automated access (HTTP {status}).") from exc
+            raise JobFetchError(f"Failed to fetch job posting: HTTP {status}.") from exc
         except httpx.RequestError as exc:
             raise JobFetchError(f"Failed to fetch job posting: {exc}.") from exc
 
@@ -117,7 +129,8 @@ class JobScraper:
             "Use strings for title, company, and location. Use arrays for responsibilities, "
             "required_skills, preferred_skills, and keywords. "
             "If a field is missing, return an empty string or empty array. Do not include any markdown or commentary.\n\n"
-            f"Job posting text:\n{truncate_for_prompt(readable_text)}\n\nSource URL: {url}"
+            f"Job posting text:\n{truncate_for_prompt(readable_text)}\n\n"
+            f"Source: {url or 'pasted by the user'}"
         )
 
     def _normalize_job_description(self, parsed: dict[str, Any], raw_text: str) -> dict[str, Any]:

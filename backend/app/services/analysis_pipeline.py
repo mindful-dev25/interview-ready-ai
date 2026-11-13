@@ -2,10 +2,7 @@
 
 import asyncio
 import logging
-import re
 from typing import Any
-
-from pydantic import HttpUrl, TypeAdapter
 
 from app.schemas import (
     AnalysisRequest,
@@ -17,6 +14,7 @@ from app.schemas import (
     JobRequirements,
     SessionState,
 )
+from app.services.analysis_progress import ProgressCallback, ProgressReporter
 from app.services.answer_drafter import AnswerDrafter
 from app.services.company_research import CompanyResearchService
 from app.services.context_documents import build_context_documents
@@ -25,32 +23,16 @@ from app.services.job_scraper import JobScraper
 from app.services.question_generator import QuestionGenerator
 from app.services.rag import RAGService
 from app.services.resume_parser import ResumeParser
+from app.services.urls import normalize_job_url, safe_url
 
 logger = logging.getLogger(__name__)
-
-_http_url_adapter = TypeAdapter(HttpUrl)
-
-
-def normalize_job_url(raw: str) -> str:
-    url = raw.strip()
-    if url and not re.match(r"^https?://", url, re.IGNORECASE):
-        url = f"https://{url}"
-    return url
-
-
-def safe_url(raw: str) -> HttpUrl | None:
-    if not raw or not raw.strip():
-        return None
-    try:
-        return _http_url_adapter.validate_python(raw.strip())
-    except Exception:
-        return None
 
 
 class AnalysisPipeline:
     """Orchestrates scraping, parsing, research, indexing, question generation and drafting.
 
-    Every step degrades gracefully: a failed step is logged and replaced by a
+    A job page that cannot be read stops the run before any LLM call is made.
+    Every later step degrades gracefully: a failed step is logged and replaced by a
     generic fallback, and user-relevant fallbacks are reported in ``metadata["warnings"]``.
     """
 
@@ -70,22 +52,37 @@ class AnalysisPipeline:
         self.question_generator = question_generator
         self.answer_drafter = answer_drafter
 
-    async def run(self, session_id: str, request: AnalysisRequest) -> SessionState:
+    async def run(
+        self, session_id: str, request: AnalysisRequest, on_progress: ProgressCallback | None = None
+    ) -> SessionState:
         job_url = normalize_job_url(request.job_url)
-        if not job_url:
-            raise ValueError("A job URL is required.")
+        job_text = (request.job_text or "").strip()
+        if not job_url and not job_text:
+            raise ValueError("A job URL or a pasted job description is required.")
+
+        progress = ProgressReporter(on_progress)
+        progress.start()
+
+        # Pasted text wins over the URL: the user supplies it when the page cannot be fetched.
+        # Otherwise the page is read first, so an unreadable one raises here, before any LLM call.
+        job_text = job_text or await self.job_scraper.fetch_text(job_url)
+
+        async def parse_resume() -> tuple[dict[str, Any], str | None]:
+            parsed = await self._parse_resume(request.resume_text)
+            progress.finish("resume")
+            return parsed
 
         # The resume and the job posting are independent, so they are processed concurrently.
         (job_data, company_research), (resume_data, resume_warning) = await asyncio.gather(
-            self._load_job(job_url),
-            self._parse_resume(request.resume_text),
+            self._load_job(job_url, job_text, progress), parse_resume()
         )
         job_requirements = self._build_job_requirements(job_url, job_data)
 
         await self._index_context(session_id, request.resume_text, job_data, job_requirements, company_research)
 
         questions = await self._generate_questions(resume_data, job_requirements, company_research)
-        answers = await self._draft_answers(session_id, questions, request.resume_text)
+        progress.finish("questions")
+        answers = await self._draft_answers(session_id, questions, request.resume_text, progress)
 
         return SessionState(
             session_id=session_id,
@@ -105,9 +102,14 @@ class AnalysisPipeline:
             },
         )
 
-    async def _load_job(self, job_url: str) -> tuple[dict[str, Any], CompanyResearch]:
-        job_data = await self.job_scraper.scrape(job_url)
-        return job_data, await self._research_company(job_data)
+    async def _load_job(
+        self, job_url: str, job_text: str, progress: ProgressReporter
+    ) -> tuple[dict[str, Any], CompanyResearch]:
+        job_data = await self.job_scraper.parse_text(job_text, job_url)
+        progress.finish("job")
+        company_research = await self._research_company(job_data)
+        progress.finish("research")
+        return job_data, company_research
 
     @staticmethod
     def _build_job_requirements(job_url: str, job_data: dict[str, Any]) -> JobRequirements:
@@ -207,10 +209,17 @@ class AnalysisPipeline:
         return wrap_with_standard_questions(generated)
 
     async def _draft_answers(
-        self, session_id: str, questions: list[InterviewQuestion], resume_text: str | None
+        self,
+        session_id: str,
+        questions: list[InterviewQuestion],
+        resume_text: str | None,
+        progress: ProgressReporter,
     ) -> list[InterviewAnswer]:
+        progress.expect_drafts(len(questions))
         try:
-            return await self.answer_drafter.draft_answers(session_id, questions, resume_text=resume_text)
+            return await self.answer_drafter.draft_answers(
+                session_id, questions, resume_text=resume_text, on_drafted=progress.draft_finished
+            )
         except Exception:
             logger.warning("Answer drafting failed; returning empty drafts.", exc_info=True)
             return [

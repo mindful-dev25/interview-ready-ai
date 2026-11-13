@@ -79,8 +79,13 @@ def split_sentences(text: str) -> list[str]:
 
 
 def extract_evidence_ids(text: str) -> list[str]:
-    """Return the unique ``[id]`` citations found in the text."""
-    return list({match.group(1).strip() for match in _CITATION_RE.finditer(text)})
+    """Return the unique ids cited in the text as ``[id]`` or ``[id1, id2]``, in first-seen order."""
+    ids = (
+        evidence_id.strip()
+        for match in _CITATION_RE.finditer(text)
+        for evidence_id in re.split(r"[,;]", match.group(1))
+    )
+    return list(dict.fromkeys(evidence_id for evidence_id in ids if evidence_id))
 
 
 def strip_citations(text: str) -> str:

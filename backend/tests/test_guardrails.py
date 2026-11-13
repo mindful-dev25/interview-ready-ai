@@ -64,3 +64,11 @@ def test_resume_check_is_skipped_when_no_resume_was_provided():
 
     explanations = [claim.explanation for claim in result["truthfulness_result"].claims]
     assert not any("resume" in explanation for explanation in explanations)
+
+
+def test_citation_lists_in_one_bracket_are_split_into_ids():
+    from app.services.guardrails.text import extract_evidence_ids
+
+    text = "I cut costs [evidence-a]. I tracked quality [evidence-b, evidence-c; evidence-a]."
+
+    assert extract_evidence_ids(text) == ["evidence-a", "evidence-b", "evidence-c"]

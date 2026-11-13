@@ -73,6 +73,21 @@ export type AnalysisResponse = {
   };
 };
 
+/** The step the analysis is on, matching the first four steps of the progress stepper. */
+export type AnalysisPhase = "resume" | "job" | "research" | "draft";
+
+export type AnalysisProgressUpdate = {
+  phase: AnalysisPhase;
+  percent: number;
+  message: string;
+};
+
+/** One line of the `POST /analysis/stream` response. */
+export type AnalysisStreamEvent =
+  | ({ type: "progress" } & AnalysisProgressUpdate)
+  | { type: "result"; data: AnalysisResponse }
+  | { type: "error"; detail: string };
+
 export type ReviewResponse = {
   session_id: string;
   answer_id: string;

@@ -1,12 +1,13 @@
 import asyncio
 import logging
-import re
+from collections.abc import Callable
 from typing import Any
 
 from app.core.llm import LLMClient
 from app.core.prompts import ANSWER_DRAFT_PROMPT
 from app.schemas import EvidenceItem, EvidenceSourceType, InterviewAnswer, InterviewQuestion
 from app.services.guardrails import GuardrailService
+from app.services.guardrails.text import extract_evidence_ids
 from app.services.rag import RAGService
 
 logger = logging.getLogger(__name__)
@@ -16,7 +17,8 @@ MAX_CONCURRENT_DRAFTS = 4
 EVIDENCE_PER_QUESTION = 5
 
 _SYSTEM_PROMPT = (
-    "You are an expert interview coach. Draft concise, confident, first-person interview answers. "
+    "You are an expert interview coach. Draft short, confident, first-person interview answers "
+    "in plain, easy English: short sentences, everyday words, no jargon. "
     "When resume evidence is available, make answers specific and personal. "
     "When no evidence is available, write strong general answers that demonstrate the competency — "
     "never use placeholder brackets or leave sentences incomplete."
@@ -27,7 +29,6 @@ _DRAFT_LABEL = "draft answer:"
 _RATIONALE_LABEL = "rationale:"
 _CONFIDENCE_LABEL = "confidence:"
 _EVIDENCE_LABEL = "evidence used:"
-_CITATION = re.compile(r"\[([^\]]+)\]")
 
 
 class AnswerDrafter:
@@ -50,13 +51,20 @@ class AnswerDrafter:
         session_id: str,
         questions: list[InterviewQuestion],
         resume_text: str | None = None,
+        on_drafted: Callable[[], None] | None = None,
     ) -> list[InterviewAnswer]:
-        """Draft one answer per question, concurrently, returned in question order."""
+        """Draft one answer per question, concurrently, returned in question order.
+
+        ``on_drafted`` is called each time one answer is finished, in whatever order they finish.
+        """
         semaphore = asyncio.Semaphore(self.max_concurrency)
 
         async def draft(question: InterviewQuestion) -> InterviewAnswer:
             async with semaphore:
-                return await self._draft_answer(session_id, question, resume_text)
+                answer = await self._draft_answer(session_id, question, resume_text)
+            if on_drafted is not None:
+                on_drafted()
+            return answer
 
         return list(await asyncio.gather(*(draft(question) for question in questions)))
 
@@ -151,9 +159,7 @@ class AnswerDrafter:
     ) -> InterviewAnswer:
         draft_answer = parsed.get("draft_answer", "")
         # Count evidence the model listed as used and evidence it cited inline as [id].
-        used_ids = set(parsed.get("evidence_used", [])) | {
-            match.strip() for match in _CITATION.findall(draft_answer)
-        }
+        used_ids = set(parsed.get("evidence_used", [])) | set(extract_evidence_ids(draft_answer))
 
         answer_id = "a" + question.id[1:] if question.id.startswith("q") else f"a_{question.id}"
         return InterviewAnswer(

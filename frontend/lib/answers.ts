@@ -82,6 +82,87 @@ export function collectEvidence(answers: InterviewAnswer[]): EvidenceItem[] {
   return items;
 }
 
+/** An evidence item with the number it is shown under, both in answers and in the Evidence panel. */
+export type NumberedEvidence = { number: number; item: EvidenceItem };
+
+/** Number the evidence items 1, 2, 3... in panel order, keyed by id, so answers can refer to them. */
+export function indexEvidence(items: EvidenceItem[]): Map<string, NumberedEvidence> {
+  const index = new Map<string, NumberedEvidence>();
+  items.forEach((item, position) => {
+    if (item.id) index.set(item.id, { number: position + 1, item });
+  });
+  return index;
+}
+
+/**
+ * A run of answer text, or a group of adjacent citations. A citation group carries
+ * the word before it (`lead`) and any punctuation right after it (`trail`), so the
+ * three can be kept on one line.
+ */
+export type AnswerSegment =
+  | { type: "text"; text: string }
+  | { type: "citation"; ids: string[]; lead: string; trail: string };
+
+/** A bracketed marker, which may list several ids: `[a]`, `[a, b]`. */
+const CITATION_MARKER = /\[([^\[\]]+)\]/g;
+/** The shape of the backend's evidence ids, used to hide citations to evidence that is not shown. */
+const EVIDENCE_ID = /^evidence[-_]\w+$/i;
+const LAST_WORD = /\S+$/;
+const LEADING_PUNCTUATION = /^[.,;:!?)]+/;
+
+/** The known ids a marker cites, or null when the marker is ordinary bracketed text. */
+function markerIds(inner: string, isKnownEvidence: (id: string) => boolean): string[] | null {
+  const ids = inner.split(/[,;]/).map((id) => id.trim());
+  if (!ids.every((id) => isKnownEvidence(id) || EVIDENCE_ID.test(id))) return null;
+  return ids.filter(isKnownEvidence);
+}
+
+/**
+ * Split answer text at citation markers such as `[evidence-1a2b]` or
+ * `[evidence-1a2b, evidence-3c4d]`. Adjacent markers form one group. Markers that
+ * cite evidence not in the list are dropped; other bracketed text is left as it is.
+ */
+export function splitCitations(text: string, isKnownEvidence: (id: string) => boolean): AnswerSegment[] {
+  // Alternating text and id groups: texts[k] comes before groups[k], texts[k + 1] after it.
+  const texts: string[] = [];
+  const groups: string[][] = [];
+  let textStart = 0;
+  for (const match of text.matchAll(CITATION_MARKER)) {
+    const ids = markerIds(match[1], isKnownEvidence);
+    if (ids === null) continue;
+    const between = text.slice(textStart, match.index);
+    if (groups.length > 0 && !between.trim()) {
+      groups[groups.length - 1].push(...ids);
+    } else {
+      texts.push(between);
+      groups.push(ids);
+    }
+    textStart = match.index + match[0].length;
+  }
+  texts.push(text.slice(textStart));
+
+  const segments: AnswerSegment[] = [];
+  const pushText = (value: string) => {
+    if (value) segments.push({ type: "text", text: value });
+  };
+  groups.forEach((group, k) => {
+    let before = texts[k].trimEnd();
+    const ids = [...new Set(group)];
+    if (ids.length === 0) {
+      pushText(before);
+      return;
+    }
+    const lead = before.match(LAST_WORD)?.[0] ?? "";
+    before = before.slice(0, before.length - lead.length);
+    const trail = texts[k + 1].match(LEADING_PUNCTUATION)?.[0] ?? "";
+    texts[k + 1] = texts[k + 1].slice(trail.length);
+    pushText(before);
+    segments.push({ type: "citation", ids, lead, trail });
+  });
+  pushText(texts[texts.length - 1]);
+  return segments;
+}
+
 export function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
