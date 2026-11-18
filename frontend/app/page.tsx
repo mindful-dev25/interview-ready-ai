@@ -97,7 +97,8 @@ export default function Home() {
             )}
           </div>
 
-          <aside className="space-y-4">
+          {/* Sticky on wide screens: the answers column is much taller, so the summary and evidence follow the reader. */}
+          <aside className="flex flex-col gap-4 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:self-start">
             <HumanReviewControls
               pendingCount={reviewCounts.pending}
               approvedCount={reviewCounts.approved}
@@ -109,15 +110,17 @@ export default function Home() {
               onApproveAll={session.approveAll}
               approvingAll={session.approvingAll}
             />
-            <FinalReport
-              markdown={report.markdown ?? undefined}
-              isLoading={report.loading}
-              ready={report.ready && Boolean(report.markdown)}
-              error={report.error}
-            />
             <EvidencePanel items={session.evidenceItems} />
           </aside>
         </section>
+
+        {/* Full width under the answers: in the side column a long report made that column far taller than the answers. */}
+        <FinalReport
+          // Hidden again if an answer is reopened after the report was made.
+          markdown={report.ready ? report.markdown ?? undefined : undefined}
+          isLoading={report.loading}
+          error={report.error}
+        />
 
         {session.reviewError ? (
           <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{session.reviewError}</div>

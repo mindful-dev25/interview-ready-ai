@@ -32,6 +32,9 @@ export function useInterviewSession() {
 
   function replaceAnswer(updated: InterviewAnswer) {
     setAnswers((current) => current.map((answer) => (answer.id === updated.id ? updated : answer)));
+    // A report shown so far was built from the old answer; the next "Generate" builds a new one.
+    setReportMarkdown(null);
+    setReportError(null);
   }
 
   async function analyze(jobUrl: string, resumeText: string, jobText = "") {

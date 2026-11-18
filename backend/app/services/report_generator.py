@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Any
 
 from app.core.llm import LLMClient, LLMGenerationError
@@ -9,6 +10,7 @@ from app.schemas import (
     JobRequirements,
     SessionState,
 )
+from app.services.guardrails.text import strip_citations
 from app.services.report_markdown import tidy_report_markdown
 
 logger = logging.getLogger(__name__)
@@ -33,10 +35,41 @@ _QUESTIONS_FOR_INTERVIEWER = [
     "What challenges is the team currently facing that this role would help solve?",
 ]
 _NO_RISKS_NOTE = "No unresolved risks or gaps were identified for the approved answers."
+# The LLM writes this line where the questions and answers belong; it is replaced by them word for word.
+ANSWERS_MARKER = "<!-- ANSWERS -->"
+_ANSWERS_HEADING = "## Interview Questions & Answers"
+# Bump when the report layout changes, so reports saved in an older layout are rebuilt.
+REPORT_FORMAT_VERSION = 1
+_SPACE_BEFORE_PUNCTUATION = re.compile(r"[ \t]+([.,;:!?])")
+_SPACE_RUNS = re.compile(r"[ \t]{2,}")
 
 
 def _bullets(items: list[str]) -> str:
     return "\n".join(f"- {item}" for item in items)
+
+
+def _without_citations(text: str) -> str:
+    """Drop ``[evidence-id]`` markers, which mean nothing outside the review screen."""
+    text = _SPACE_BEFORE_PUNCTUATION.sub(r"\1", strip_citations(text))
+    return _SPACE_RUNS.sub(" ", text).strip()
+
+
+def answers_markdown(answers: list[dict[str, Any]]) -> str:
+    """Every reviewed question with its full final answer, as the reviewer approved it."""
+    blocks = []
+    for number, answer in enumerate(answers, start=1):
+        question = " ".join(answer["question"].split())
+        blocks.append(f"### Question {number}\n\n**{question}**\n\n{_without_citations(answer['final_answer'])}")
+    return "\n\n".join(blocks)
+
+
+def insert_answers(report: str, answers: list[dict[str, Any]]) -> str:
+    """Put the full questions and answers at the marker, or in a section at the end if the LLM left it out."""
+    full_answers = answers_markdown(answers)
+    if ANSWERS_MARKER not in report:
+        return f"{report}\n\n{_ANSWERS_HEADING}\n\n{full_answers}"
+    before, after = report.split(ANSWERS_MARKER, 1)
+    return f"{before}{full_answers}{after.replace(ANSWERS_MARKER, '')}"
 
 
 class ReportGenerator:
@@ -59,7 +92,7 @@ class ReportGenerator:
                 prompt=self._build_report_prompt(context), system_prompt=_SYSTEM_PROMPT
             )
             if markdown.strip():
-                return tidy_report_markdown(markdown)
+                return insert_answers(tidy_report_markdown(markdown), context["approved_answers"])
         except (LLMGenerationError, ValueError):
             logger.warning("LLM report generation failed; using the template report.", exc_info=True)
 
@@ -143,7 +176,11 @@ class ReportGenerator:
             "Create a polished markdown final report using only the approved answers and context below. "
             "Do not invent new candidate details or include any draft answers that were not approved or edited. "
             "Organize the report with clear headings and concise sections.\n"
-            "It is shown in a narrow panel, so use only headings, short paragraphs and bullet lists: "
+            "The app inserts every approved question and its full answer word for word, so do not restate, "
+            "quote or summarize the answers. Where that section belongs, write its heading (for example "
+            f"'## 3. Interview Questions & Answers') with the line {ANSWERS_MARKER} on its own under it. "
+            "Use the answers only to inform the other sections.\n"
+            "The viewer shows plain markdown, so use only headings, short paragraphs and bullet lists: "
             "no markdown tables and no HTML tags such as <br>. For the candidate background, give each role "
             "a bold line like **Role · Company · Period** followed by a bullet list of its key evidence.\n\n"
             f"Target Role: {context['target_role']}\n"
@@ -170,16 +207,9 @@ class ReportGenerator:
             "## Candidate Positioning Summary",
             context["job_summary"] or "The candidate is positioned for the target role based on the approved answers.",
             "",
-            "## Approved Interview Answers",
-        ]
-
-        for answer in context["approved_answers"]:
-            lines += [f"### {answer['question']}", answer["final_answer"], ""]
-            evidence_lines = self._evidence_lines(answer)
-            if evidence_lines:
-                lines += ["Evidence notes:", *evidence_lines, ""]
-
-        lines += [
+            _ANSWERS_HEADING,
+            answers_markdown(context["approved_answers"]),
+            "",
             "## Coaching Tips",
             _bullets(_COACHING_TIPS),
             "",

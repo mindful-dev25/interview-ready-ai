@@ -1,6 +1,6 @@
 # Interview Ready AI Frontend
 
-Next.js frontend for uploading resume context, submitting a job URL, reviewing generated interview answers, and exporting a final prep report.
+Next.js frontend for uploading resume context, submitting a job URL or pasted job description, reviewing generated interview answers, and generating a final prep report.
 
 ## Setup
 

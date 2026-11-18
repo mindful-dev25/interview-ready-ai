@@ -162,6 +162,8 @@ class FinalReportResponse(BaseModel):
     approved_answers: list[InterviewAnswer] = Field(default_factory=list)
     outstanding_reviews: list[str] = Field(default_factory=list)
     generated_at: datetime = Field(default_factory=utc_now)
+    # Layout version of report_markdown; reports saved before versioning count as 0.
+    format_version: int = 0
 
 
 class SessionState(BaseModel):

@@ -12,14 +12,15 @@ const LONG_QUOTE_CHARS = 280;
 
 export default function EvidencePanel({ items }: EvidencePanelProps) {
   return (
-    <aside className="rounded-lg border border-border bg-white p-5 shadow-sm">
+    // On wide screens the page keeps this panel in view, so only the list scrolls and the heading stays put.
+    <aside className="flex min-h-0 flex-col rounded-lg border border-border bg-white p-5 shadow-sm">
       <h2 className="text-lg font-semibold">Evidence</h2>
       {items.length > 0 && (
         <p className="text-sm text-muted-foreground">
           The numbers match the citations in the answers. Click a number in an answer to read its evidence there.
         </p>
       )}
-      <div className="mt-4 flex flex-col gap-3">
+      <div className="mt-4 flex min-h-0 flex-col gap-3 lg:-mr-2 lg:overflow-y-auto lg:pr-2">
         {items.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No evidence retrieved yet. Evidence will appear here once resume and job context are indexed.

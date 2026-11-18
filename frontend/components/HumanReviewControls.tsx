@@ -29,7 +29,7 @@ export default function HumanReviewControls({
     <section className="rounded-lg border border-border bg-white p-5 shadow-sm">
       <h2 className="text-lg font-semibold">Review summary</h2>
       <p className="text-sm text-muted-foreground">
-        Approve or edit every answer, then generate the final report.
+        Approve or edit every answer, then generate the final report. It appears below the answers.
       </p>
       <div className="mt-3 flex flex-wrap gap-2 text-sm">
         {pendingCount > 0 && (

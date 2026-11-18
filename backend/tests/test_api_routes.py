@@ -1,5 +1,7 @@
 """End-to-end API tests. Every external call (web fetch, LLM) is replaced by a fake (see conftest.py)."""
 
+import asyncio
+
 from fastapi.testclient import TestClient
 from fakes import EXPECTED_ANSWER_COUNT, JOB_PAGE_TEXT, RESUME_TEXT
 
@@ -166,13 +168,56 @@ def test_report_is_available_only_after_every_answer_is_reviewed(client):
 
     report = client.get(f"/api/report/{session_id}")
     assert report.status_code == 200, report.text
-    assert report.json()["report_markdown"] == "# Final report"
+    markdown = report.json()["report_markdown"]
+    assert markdown.startswith("# Final report\n\n## Interview Questions & Answers")
+    # Every question is in the report with its full answer.
+    for number, answer in enumerate(data["answers"], start=1):
+        assert f"### Question {number}\n\n**{answer['question']['question']}**" in markdown
     assert len(report.json()["approved_answers"]) == EXPECTED_ANSWER_COUNT
 
     # The stored report is returned on later requests.
-    assert client.get(f"/api/report/{session_id}").json()["report_markdown"] == "# Final report"
+    assert client.get(f"/api/report/{session_id}").json()["report_markdown"] == markdown
 
 
 def test_unknown_session_returns_404(client):
     assert client.get("/api/analysis/does-not-exist").status_code == 404
     assert client.get("/api/report/does-not-exist").status_code == 404
+
+
+def test_a_stored_report_saved_with_a_table_is_served_as_lists(client, reviser):
+    data = start_analysis(client)
+    session_id = data["session_id"]
+    for answer in data["answers"]:
+        review(client, session_id, answer["id"])
+    client.get(f"/api/report/{session_id}")
+
+    # A report saved before tables were converted, as older sessions have.
+    stored = asyncio.run(reviser.store.load(session_id))
+    stored["final_report"]["report_markdown"] = "| Role | Evidence |\n|---|---|\n| Engineer | • A<br>• B |"
+    asyncio.run(reviser.store.save(session_id, stored))
+
+    report = client.get(f"/api/report/{session_id}").json()["report_markdown"]
+    assert report == "**Engineer**\n\n- A\n- B"
+
+
+def test_report_is_rebuilt_after_an_answer_is_revised_and_approved_again(client, reviser):
+    data = start_analysis(client)
+    session_id = data["session_id"]
+    reviser.session_id = session_id
+    for answer in data["answers"]:
+        review(client, session_id, answer["id"])
+    assert client.get(f"/api/report/{session_id}").status_code == 200
+
+    revised = client.post(
+        "/api/revision",
+        json={"session_id": session_id, "answer_id": "a2", "reviewer_notes": "Be more specific."},
+    )
+    assert revised.status_code == 200, revised.text
+    # Until the revised answer is reviewed, there is no report to show.
+    assert client.get(f"/api/report/{session_id}").status_code == 409
+
+    review(client, session_id, "a2")
+    report = client.get(f"/api/report/{session_id}").json()
+
+    approved = {answer["id"]: answer["final_answer"] for answer in report["approved_answers"]}
+    assert approved["a2"] == "A revised answer."

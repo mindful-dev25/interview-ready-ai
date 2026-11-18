@@ -25,7 +25,7 @@ The tests run offline: web fetches and LLM calls are replaced by fakes.
 - `POST /api/analysis/stream` runs the same pipeline but reports progress while it works. The response is newline-delimited JSON: `progress` events with a percent and a message, then one `result` (the `POST /api/analysis` payload) or `error` event. The frontend uses this endpoint.
 - `POST /api/resume/extract` turns an uploaded PDF resume (up to 5 MB) into text, which the frontend puts in the resume box for review before analysis. Scanned PDFs without a text layer are rejected with an explanation.
 - `POST /api/review` and `POST /api/revision` record human review of each answer.
-- `GET /api/report/{session_id}` generates the final report once every answer is approved or edited.
+- `GET /api/report/{session_id}` generates the final report once every answer is approved or edited. The report is saved with the session and rebuilt when a reviewed answer has changed since.
 - Sessions are JSON files under `SESSION_STORE_PATH`; the retrieval index is JSON files under `CHROMA_PERSIST_DIR`.
 
 A job page that cannot be read (blocked, missing, or needing a login) stops the analysis before any LLM call, with a message asking for the job description to be pasted instead. Every later pipeline step falls back to a generic result if it fails. Failures are logged, and those the user should know about are returned in `metadata.warnings`.
