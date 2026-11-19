@@ -1,14 +1,20 @@
 """API routers, combined into a single ``router`` mounted under ``/api``."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
-from app.api.routes import analysis, health, report, resume, review
+from app.api.routes import analysis, auth, health, report, resume, review
+from app.api.routes.auth import require_app_password
 
 router = APIRouter()
 router.include_router(health.router)
-router.include_router(resume.router)
-router.include_router(analysis.router)
-router.include_router(review.router)
-router.include_router(report.router)
+router.include_router(auth.router)
+
+# Everything that reads or writes user data, or calls Claude, sits behind APP_PASSWORD when it is set.
+protected = APIRouter(dependencies=[Depends(require_app_password)])
+protected.include_router(resume.router)
+protected.include_router(analysis.router)
+protected.include_router(review.router)
+protected.include_router(report.router)
+router.include_router(protected)
 
 __all__ = ["router"]

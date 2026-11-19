@@ -77,7 +77,13 @@ async def stream_analysis(
             # If the client went away mid-run, stop the pipeline so it makes no further LLM calls.
             task.cancel()
 
-    return StreamingResponse(events(), media_type="application/x-ndjson", headers={"Cache-Control": "no-cache"})
+    # no-transform and X-Accel-Buffering stop proxies in front (Next.js, a load balancer) from
+    # compressing or buffering the stream, which would hold back the progress events.
+    return StreamingResponse(
+        events(),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/analysis/{session_id}", response_model=SessionState)

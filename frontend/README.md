@@ -16,5 +16,5 @@ The app runs at `http://localhost:3000`.
 
 - `app/page.tsx` composes the page.
 - `lib/hooks/` holds the session state and API actions (`useInterviewSession`) and resume input (`useResumeInput`).
-- `lib/api.ts` is the API client; `lib/types.ts` mirrors the backend response models.
+- `components/PasswordGate.tsx` asks for the app password when the backend sets `APP_PASSWORD`, and `lib/api.ts` sends it with every call; `lib/types.ts` mirrors the backend response models.
 - `components/` holds the UI pieces, built with React, TypeScript, and Tailwind CSS.

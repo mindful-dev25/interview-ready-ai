@@ -26,6 +26,7 @@ The tests run offline: web fetches and LLM calls are replaced by fakes.
 - `POST /api/resume/extract` turns an uploaded PDF resume (up to 5 MB) into text, which the frontend puts in the resume box for review before analysis. Scanned PDFs without a text layer are rejected with an explanation.
 - `POST /api/review` and `POST /api/revision` record human review of each answer.
 - `GET /api/report/{session_id}` generates the final report once every answer is approved or edited. The report is saved with the session and rebuilt when a reviewed answer has changed since.
+- `GET /api/auth` says whether `APP_PASSWORD` is set, and `POST /api/auth` checks a password. When it is set, every other route except `GET /api/health` returns 401 unless the request sends the password in the `X-App-Password` header.
 - Sessions are JSON files under `SESSION_STORE_PATH`; the retrieval index is JSON files under `CHROMA_PERSIST_DIR`.
 
 A job page that cannot be read (blocked, missing, or needing a login) stops the analysis before any LLM call, with a message asking for the job description to be pasted instead. Every later pipeline step falls back to a generic result if it fails. Failures are logged, and those the user should know about are returned in `metadata.warnings`.

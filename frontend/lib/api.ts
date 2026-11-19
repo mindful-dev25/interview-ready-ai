@@ -11,6 +11,73 @@ import type {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api";
 
+// The app password (when the backend sets APP_PASSWORD) is kept in this browser and sent on every call.
+const PASSWORD_KEY = "interview-ready-ai.password";
+const PASSWORD_HEADER = "X-App-Password";
+const lockListeners = new Set<() => void>();
+let memoryPassword = "";
+
+export function savedPassword(): string {
+  try {
+    return localStorage.getItem(PASSWORD_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function savePassword(password: string) {
+  try {
+    if (password) localStorage.setItem(PASSWORD_KEY, password);
+    else localStorage.removeItem(PASSWORD_KEY);
+  } catch {
+    // Storage can be blocked (private windows); the password then lasts only for this page.
+  }
+  memoryPassword = password;
+}
+
+function passwordHeaders(): Record<string, string> {
+  const password = memoryPassword || savedPassword();
+  return password ? { [PASSWORD_HEADER]: password } : {};
+}
+
+/** Called when the backend refuses a call for a missing or wrong password, so the password screen can return. */
+export function onLocked(listener: () => void): () => void {
+  lockListeners.add(listener);
+  return () => lockListeners.delete(listener);
+}
+
+/** Send every call through here, so the password goes with it and a refusal locks the app. */
+async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers: { ...(init.headers as Record<string, string> | undefined), ...passwordHeaders() },
+  });
+  if (response.status === 401) {
+    savePassword("");
+    lockListeners.forEach((listener) => listener());
+  }
+  return response;
+}
+
+/** Whether the backend asks for a password at all. */
+export async function passwordRequired(): Promise<boolean> {
+  const response = await fetch(`${API_BASE_URL}/auth`);
+  if (!response.ok) throw await errorFrom(response, "Could not reach the server.");
+  const payload: { password_required: boolean } = await response.json();
+  return payload.password_required;
+}
+
+/** Check a password with the backend and keep it for later calls when it is right. */
+export async function unlock(password: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/auth`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+  if (!response.ok) throw await errorFrom(response, "Could not check the password.");
+  savePassword(password);
+}
+
 /**
  * Call the API and return the parsed JSON. Passing a body makes it a POST:
  * FormData is sent as a file upload, anything else as JSON.
@@ -29,7 +96,7 @@ async function request<T>(path: string, fallbackError: string, body?: unknown): 
             body: JSON.stringify(body),
           };
 
-  const response = await fetch(`${API_BASE_URL}${path}`, init);
+  const response = await apiFetch(path, init);
   if (!response.ok) throw await errorFrom(response, fallbackError);
   return response.json();
 }
@@ -58,7 +125,7 @@ export async function startAnalysis(
   onProgress: (update: AnalysisProgressUpdate) => void,
 ): Promise<AnalysisResponse> {
   const fallbackError = "Failed to start interview analysis.";
-  const response = await fetch(`${API_BASE_URL}/analysis/stream`, {
+  const response = await apiFetch("/analysis/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ job_url: input.jobUrl, job_text: input.jobText, resume_text: input.resumeText }),

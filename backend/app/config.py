@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     claude_model: str = "claude-opus-5-5"
 
+    # When set, every API call except /health and /auth must send it in the X-App-Password header.
+    # Left empty, the app is open to everyone.
+    app_password: str = ""
+
     chroma_persist_dir: str = "./chroma_db"
     session_store_path: str = "./sessions"
     allowed_origins: Annotated[list[str], NoDecode] = Field(

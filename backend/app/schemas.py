@@ -42,6 +42,14 @@ class HealthResponse(BaseModel):
     app_name: str
 
 
+class AuthStatusResponse(BaseModel):
+    password_required: bool
+
+
+class AuthCheckRequest(BaseModel):
+    password: str
+
+
 class AnalyzeRequestMetadata(BaseModel):
     user_id: str | None = None
     target_role: str | None = None
