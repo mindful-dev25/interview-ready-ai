@@ -46,7 +46,7 @@ Once every answer is approved or edited, **Generate final report** builds a prep
 backend/   FastAPI API, analysis pipeline, RAG and guardrail services, and storage adapters
 frontend/  Next.js app shell and interview-prep UI components
 docs/      Demo recording and README screenshots
-Dockerfile, start.sh, render.yaml   One-container image and its Render deployment
+Dockerfile, start.sh   One-container image for deployment (see Deployment)
 ```
 
 See [backend/README.md](backend/README.md) for the API endpoints and [frontend/README.md](frontend/README.md) for the UI code layout.
@@ -98,26 +98,33 @@ The tests run offline: web fetches and Claude calls are replaced by fakes. For t
 
 ## Deployment
 
-### One container on Render (simplest)
+### One container
 
-The repository includes a `Dockerfile` that builds both halves into one image, and a `render.yaml` Blueprint that deploys it. Inside the container, Next.js serves the site on Render's port and forwards every `/api` request to FastAPI, which listens only inside the container. The browser sees a single site, so there is no CORS setup and no API URL to configure.
-
-1. Push the repository to GitHub.
-2. In Render, choose **New > Blueprint** and pick the repository. Render reads `render.yaml` and creates the web service with a 1 GB persistent disk at `/data`, which keeps sessions and the retrieval index across restarts and deploys.
-3. When asked, enter `ANTHROPIC_API_KEY` and, optionally, `APP_PASSWORD`.
-4. Open the `onrender.com` URL once the deploy is live. Render checks `/api/health` before sending traffic to a new deploy.
-
-Notes:
-
-- Persistent disks need a paid instance type, so the Blueprint uses `starter`. On the free type the service sleeps when idle and loses its files on every restart.
-- A service with a disk runs as a single instance, and each deploy has a short gap of downtime.
-- If Render reports the service ran out of memory (it runs Node and Python side by side), move to the next instance type.
+The repository includes a `Dockerfile` that builds both halves into one image. Inside the container, Next.js serves the site on port 10000 and forwards every `/api` request to FastAPI, which listens only inside the container. The browser sees a single site, so there is no CORS setup and no API URL to configure. Sessions and the retrieval index are written to `/data`, so mount a persistent volume there.
 
 To try the image locally: `docker build -t interview-ready-ai .` then `docker run -p 10000:10000 -e ANTHROPIC_API_KEY=... -v irai-data:/data interview-ready-ai`, and open `http://localhost:10000`.
 
+### Northflank (free)
+
+Northflank's free Sandbox runs the image with a persistent volume and keeps it running (no sleeping). It is meant for demos and testing rather than production. Northflank may ask for a card to verify your account; the Sandbox itself is free. Button names below may differ slightly in the dashboard.
+
+1. Push the repository to GitHub, and sign up at [northflank.com](https://northflank.com) (signing up with GitHub links your repositories in one step).
+2. Create a project. The free Sandbox allows 2 projects and 2 services.
+3. In the project, choose **Create new > Service**, then **Combined service** (it builds and deploys from a repository).
+   - **Repository:** this repository, branch `main`.
+   - **Build type:** Dockerfile, with Dockerfile path `/Dockerfile` and build context `/`.
+   - **Compute plan:** the largest the Sandbox offers, at least 0.2 vCPU and 512 MB (Node and Python run side by side).
+   - **Ports:** Northflank reads port 10000 from the Dockerfile. Check that it is set to HTTP and **Public**.
+4. Before the first deploy finishes, open the service's **Environment** page and add the runtime variables `ANTHROPIC_API_KEY` and, optionally, `APP_PASSWORD`.
+5. On the **Volumes** page, add a volume (Single Read/Write, the smallest size) with container mount path `/data`. Without it, sessions are lost on every restart and deploy. A volume can only grow later, never shrink.
+6. On the **Health checks** page, add a readiness check: HTTP, path `/api/health`, port 10000.
+7. Open the public URL (it ends in `.code.run`) from the service's header once the deploy is running.
+
+New commits on `main` rebuild and redeploy automatically while CI is turned on for the service. Change `APP_PASSWORD` on the **Environment** page; the service restarts with the new value.
+
 ### Separate frontend and backend
 
-The two halves can also be deployed on their own, for example the frontend on Vercel or Netlify and the backend on Render, Railway or Fly.io:
+The two halves can also be deployed on their own hosts:
 
 - **Backend:** any host that runs a long-lived Python process. An analysis can stream for a few minutes, so avoid serverless functions with short time limits. Sessions and the retrieval index are files, so attach a persistent disk and point `SESSION_STORE_PATH` and `CHROMA_PERSIST_DIR` at it; without one, sessions are lost on every restart. Install with `uv sync --frozen` and start with `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
 - **Frontend:** any host that runs `npm run build` then `npm start`. Have the browser call the backend directly as below, rather than forwarding `/api` through the frontend host, whose proxy may cut off a long analysis.
@@ -125,7 +132,7 @@ The two halves can also be deployed on their own, for example the frontend on Ve
 | Where | Setting | Value |
 | --- | --- | --- |
 | Backend | `ANTHROPIC_API_KEY` | Your Claude API key |
-| Backend | `ALLOWED_ORIGINS` | The frontend's URL, for example `https://interview-ready.vercel.app` |
+| Backend | `ALLOWED_ORIGINS` | The frontend's URL, for example `https://interview-ready.example.com` |
 | Backend | `APP_PASSWORD` | A long shared password, or empty for open access |
 | Frontend | `NEXT_PUBLIC_API_BASE_URL` | The backend's URL plus `/api`. It is built into the page, so rebuild the frontend after changing it |
 

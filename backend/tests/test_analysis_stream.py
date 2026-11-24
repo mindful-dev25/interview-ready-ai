@@ -1,10 +1,12 @@
 """Tests for the analysis endpoint that reports progress while it runs."""
 
+import asyncio
 import json
 
 from fakes import EXPECTED_ANSWER_COUNT, RESUME_TEXT
 
-from app.api.dependencies import get_llm_client
+from app.api.dependencies import get_analysis_pipeline, get_llm_client
+from app.api.routes import analysis
 from app.core.llm import LLMClient
 from app.main import app
 from app.services.analysis_progress import ProgressReporter
@@ -96,3 +98,22 @@ def test_progress_names_the_earliest_unfinished_step():
         ("draft", 55, "Drafting answers (0 of 4 done)"),
         ("draft", 66, "Drafting answers (1 of 4 done)"),
     ]
+
+
+def test_a_quiet_stretch_sends_blank_keepalive_lines(client, monkeypatch):
+    pipeline = app.dependency_overrides[get_analysis_pipeline]()
+    real_run = pipeline.run
+
+    async def slow_run(*args, **kwargs):
+        await asyncio.sleep(0.2)  # like a long Claude call with no progress to report
+        return await real_run(*args, **kwargs)
+
+    monkeypatch.setattr(pipeline, "run", slow_run)
+    monkeypatch.setattr(analysis, "KEEPALIVE_SECONDS", 0.05)
+
+    response = client.post("/api/analysis/stream", json={"job_text": JOB_TEXT, "resume_text": RESUME_TEXT})
+
+    lines = response.text.split("\n")
+    assert lines[0] == ""  # keep-alive lines came before the first event
+    events = [json.loads(line) for line in lines if line]
+    assert events[-1]["type"] == "result"

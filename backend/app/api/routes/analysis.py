@@ -20,6 +20,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["analysis"])
 
+# While Claude drafts, a minute or more can pass between progress events. A blank line this often
+# keeps proxies and load balancers from closing the connection as idle; clients skip blank lines.
+KEEPALIVE_SECONDS = 15.0
+
 
 @router.post("/analysis", response_model=AnalysisResponse)
 async def create_analysis(
@@ -52,7 +56,8 @@ async def stream_analysis(
 
     The body is newline-delimited JSON: any number of ``{"type": "progress", ...}``
     events, then exactly one ``{"type": "result", "data": ...}`` (the same payload
-    as ``POST /analysis``) or ``{"type": "error", "detail": ...}``.
+    as ``POST /analysis``) or ``{"type": "error", "detail": ...}``. Blank lines may
+    appear in between to keep the connection alive.
     """
     _require_configured_llm(llm)
     session_id = str(uuid4())
@@ -63,7 +68,14 @@ async def stream_analysis(
         # The None wakes the loop below once the run has ended, whether it succeeded or failed.
         task.add_done_callback(lambda _task: updates.put_nowait(None))
         try:
-            while (update := await updates.get()) is not None:
+            while True:
+                try:
+                    update = await asyncio.wait_for(updates.get(), timeout=KEEPALIVE_SECONDS)
+                except TimeoutError:
+                    yield "\n"
+                    continue
+                if update is None:
+                    break
                 yield _event("progress", **update.model_dump())
             state = task.result()
             await store.save(session_id, state)

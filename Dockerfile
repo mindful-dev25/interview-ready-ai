@@ -1,4 +1,4 @@
-# One image with both halves, for hosts that run a single container (such as Render).
+# One image with both halves, for hosts that run a single container (such as Northflank).
 # Next.js serves the pages on $PORT and forwards /api to FastAPI, which listens only inside the container.
 
 FROM node:24-bookworm-slim AS frontend
