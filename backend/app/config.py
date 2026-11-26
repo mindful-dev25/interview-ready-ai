@@ -16,9 +16,12 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     claude_model: str = "claude-opus-5-5"
 
-    # When set, every API call except /health and /auth must send it in the X-App-Password header.
-    # Left empty, the app is open to everyone.
-    app_password: str = ""
+    # Sign in with Google: the OAuth client ID from Google Cloud Console. When set, every API call
+    # except /health and /auth needs a signed-in Google account. Left empty, the app is open to everyone.
+    google_client_id: str = ""
+    # Signs the session cookie given out after a Google sign-in. Left empty, a random secret is made
+    # at startup, so everyone has to sign in again after each restart or deploy.
+    session_secret: str = ""
 
     chroma_persist_dir: str = "./chroma_db"
     session_store_path: str = "./sessions"

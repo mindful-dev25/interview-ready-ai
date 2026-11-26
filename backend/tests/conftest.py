@@ -19,6 +19,7 @@ from app.api.dependencies import (
     get_report_generator,
     get_session_store,
 )
+from app.config import settings
 from app.main import app
 from app.services.analysis_pipeline import AnalysisPipeline
 from app.services.answer_drafter import AnswerDrafter
@@ -41,6 +42,8 @@ def reviser(tmp_path) -> ReviserThatApprovesAnotherAnswerMeanwhile:
 
 @pytest.fixture
 def client(tmp_path, monkeypatch, scraper, reviser) -> TestClient:
+    # The API tests run signed out, even when backend/.env turns on Google sign-in.
+    monkeypatch.setattr(settings, "google_client_id", "")
     rag = RAGService(VectorStore(persist_dir=str(tmp_path / "index")))
     llm = FakeLLM(DRAFT_REPLY)
     pipeline = AnalysisPipeline(

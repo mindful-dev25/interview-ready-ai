@@ -2,6 +2,7 @@ import type {
   AnalysisProgressUpdate,
   AnalysisResponse,
   AnalysisStreamEvent,
+  AuthStatus,
   FinalReportResponse,
   ResumeTextResponse,
   ReviewAction,
@@ -11,71 +12,56 @@ import type {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api";
 
-// The app password (when the backend sets APP_PASSWORD) is kept in this browser and sent on every call.
-const PASSWORD_KEY = "interview-ready-ai.password";
-const PASSWORD_HEADER = "X-App-Password";
 const lockListeners = new Set<() => void>();
-let memoryPassword = "";
 
-export function savedPassword(): string {
-  try {
-    return localStorage.getItem(PASSWORD_KEY) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function savePassword(password: string) {
-  try {
-    if (password) localStorage.setItem(PASSWORD_KEY, password);
-    else localStorage.removeItem(PASSWORD_KEY);
-  } catch {
-    // Storage can be blocked (private windows); the password then lasts only for this page.
-  }
-  memoryPassword = password;
-}
-
-function passwordHeaders(): Record<string, string> {
-  const password = memoryPassword || savedPassword();
-  return password ? { [PASSWORD_HEADER]: password } : {};
-}
-
-/** Called when the backend refuses a call for a missing or wrong password, so the password screen can return. */
+/** Called when the backend refuses a call because the sign-in is missing or has expired, so the sign-in screen can return. */
 export function onLocked(listener: () => void): () => void {
   lockListeners.add(listener);
   return () => lockListeners.delete(listener);
 }
 
-/** Send every call through here, so the password goes with it and a refusal locks the app. */
+/**
+ * Send every call through here. The session cookie from signing in goes with it (also when the API is on
+ * another origin, as in local development), and a refusal brings the sign-in screen back.
+ */
 async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: { ...(init.headers as Record<string, string> | undefined), ...passwordHeaders() },
-  });
-  if (response.status === 401) {
-    savePassword("");
-    lockListeners.forEach((listener) => listener());
-  }
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, credentials: "include" });
+  if (response.status === 401) lockListeners.forEach((listener) => listener());
   return response;
 }
 
-/** Whether the backend asks for a password at all. */
-export async function passwordRequired(): Promise<boolean> {
-  const response = await fetch(`${API_BASE_URL}/auth`);
+/** Whether the backend needs a Google sign-in, the client ID for Google's button, and who is signed in. */
+export async function authStatus(): Promise<AuthStatus> {
+  forgetOldPassword();
+  const response = await fetch(`${API_BASE_URL}/auth`, { credentials: "include" });
   if (!response.ok) throw await errorFrom(response, "Could not reach the server.");
-  const payload: { password_required: boolean } = await response.json();
-  return payload.password_required;
+  return response.json();
 }
 
-/** Check a password with the backend and keep it for later calls when it is right. */
-export async function unlock(password: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/auth`, {
+/** Hand the ID token from Google's button to the backend, which checks it and sets the session cookie. */
+export async function signInWithGoogle(credential: string): Promise<AuthStatus> {
+  const response = await fetch(`${API_BASE_URL}/auth/google`, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ password }),
+    body: JSON.stringify({ credential }),
   });
-  if (!response.ok) throw await errorFrom(response, "Could not check the password.");
-  savePassword(password);
+  if (!response.ok) throw await errorFrom(response, "Could not sign in with Google.");
+  return response.json();
+}
+
+export async function signOut(): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/auth/sign-out`, { method: "POST", credentials: "include" });
+  if (!response.ok) throw await errorFrom(response, "Could not sign out.");
+}
+
+/** Earlier versions kept a shared app password in this browser. It is no longer used, so remove it. */
+function forgetOldPassword() {
+  try {
+    localStorage.removeItem("interview-ready-ai.password");
+  } catch {
+    // Storage can be blocked (private windows); then there is nothing stored either.
+  }
 }
 
 /**

@@ -6,6 +6,14 @@ export type HumanReviewStatus = "pending" | "approved" | "edited" | "needs_revis
 
 export type ReviewAction = "approve" | "edit" | "request_revision";
 
+export type AuthStatus = {
+  // True when the backend sets GOOGLE_CLIENT_ID, so the app needs a Google sign-in.
+  sign_in_required: boolean;
+  google_client_id: string | null;
+  // The signed-in Google account, if any.
+  email: string | null;
+};
+
 export type EvidenceItem = {
   id?: string;
   source?: string;

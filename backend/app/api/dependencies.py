@@ -11,6 +11,7 @@ from app.services.analysis_pipeline import AnalysisPipeline
 from app.services.answer_drafter import AnswerDrafter
 from app.services.answer_reviser import AnswerReviser
 from app.services.company_research import CompanyResearchService
+from app.services.google_identity import GoogleTokenVerifier
 from app.services.guardrails import GuardrailService
 from app.services.job_scraper import JobScraper
 from app.services.question_generator import QuestionGenerator
@@ -24,6 +25,12 @@ from app.storage.session_store import SessionStore
 def get_llm_client() -> LLMClient:
     """One client for every service, so they all reuse the same pooled connection."""
     return LLMClient()
+
+
+@lru_cache
+def get_google_token_verifier() -> GoogleTokenVerifier:
+    """One verifier for the app, so Google's signing keys are fetched once and cached."""
+    return GoogleTokenVerifier()
 
 
 @lru_cache

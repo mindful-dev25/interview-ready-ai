@@ -8,6 +8,7 @@ import FinalReport from "@/components/FinalReport";
 import HumanReviewControls from "@/components/HumanReviewControls";
 import JobUrlInput from "@/components/JobUrlInput";
 import ResumeUpload from "@/components/ResumeUpload";
+import { AccountStatus } from "@/components/SignInGate";
 import { useInterviewSession } from "@/lib/hooks/useInterviewSession";
 import { useResumeInput } from "@/lib/hooks/useResumeInput";
 
@@ -21,10 +22,11 @@ export default function Home() {
   return (
     <main className="min-h-screen px-6 py-8 md:px-10">
       <div className="mx-auto flex max-w-6xl flex-col gap-8">
-        <header className="flex flex-col gap-3">
+        <header className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="max-w-3xl text-3xl font-semibold tracking-normal text-foreground md:text-4xl">
             Interview Ready AI
           </h1>
+          <AccountStatus />
         </header>
 
         <section className="flex flex-col gap-4">

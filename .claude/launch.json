@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "backend-signin-check",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["--directory", "backend", "run", "--env-file", "C:/Users/Administrator/AppData/Local/Temp/claude/43e27d68645ec05b/17a1bec7-c0ec-4ae0-abf8-1d318438070b/scratchpad/signin-check.env", "uvicorn", "app.main:app", "--port", "8000"],
+      "port": 8000
     }
   ]
 }

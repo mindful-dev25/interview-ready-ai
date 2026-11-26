@@ -81,11 +81,27 @@ npm run dev
 
 The frontend runs at `http://localhost:3000` by default. It calls the API at `NEXT_PUBLIC_API_BASE_URL` (`http://localhost:8000/api` by default), and the backend only accepts requests from the origins in `ALLOWED_ORIGINS`, so update that if you run the frontend on another port.
 
-### Password protection (optional)
+### Sign in with Google (optional)
 
-Set `APP_PASSWORD` in `backend/.env` to make the app ask for a password before it can be used. Every API call except the health check then needs it, so nobody can run analyses (and spend your Claude credits) or read sessions without it. The browser remembers the password after the first sign-in. Leave `APP_PASSWORD` empty and the app is open to everyone, which is the default for local use.
+Set `GOOGLE_CLIENT_ID` in `backend/.env` and the app asks people to sign in with their Google account before they can use it. Any Google account whose email address Google has verified may sign in. Every API call except the health check then needs a sign-in, so nobody can run analyses or read sessions anonymously. Note that this does not limit who can spend your Claude credits: anyone with a Google account can sign in. Leave `GOOGLE_CLIENT_ID` empty and the app is open to everyone, which is the default for local use.
 
-It is one shared password for the whole app, not user accounts, so use a long one and only serve it over HTTPS.
+The backend checks each sign-in itself. Google's button gives the browser an ID token, and FastAPI accepts it only if it has a valid Google signature, was issued for your client ID and has not expired. FastAPI then sets its own session cookie (HttpOnly, valid for 7 days). Set `SESSION_SECRET` to a random string of at least 32 characters, for example the output of `python -c "import secrets; print(secrets.token_urlsafe(32))"`. Without it, everyone has to sign in again after each restart or deploy.
+
+To create the client ID in Google Cloud Console (button names may differ slightly):
+
+1. Open [console.cloud.google.com](https://console.cloud.google.com) and create or pick a project.
+2. Open **Google Auth Platform > Branding**. Fill in the app name and support email, choose **External** if it asks for an audience, and save.
+3. On the **Audience** page, check the publishing status. While it is **Testing**, only the test users listed there can sign in. Click **Publish app** to let any Google account in. The app uses only the basic `openid`, `email` and `profile` scopes, which do not need Google's app verification.
+4. Open **Clients > Create client** and choose **Web application**. Under **Authorized JavaScript origins**, add every address the app is opened from, as scheme and host only, with no path or trailing slash:
+   - `http://localhost` and `http://localhost:3000` for local development (Google asks for both when testing on a port)
+   - `http://localhost:10000` if you try the Docker image locally
+   - the deployed URL, for example `https://<your-service>.code.run` on Northflank
+
+   Leave **Authorized redirect URIs** empty. The button signs in through a popup and hands the token to the page, so Google never redirects back to the app.
+5. Click **Create** and copy the **Client ID** (it ends in `.apps.googleusercontent.com`). The client secret is not used.
+6. Put the client ID in `GOOGLE_CLIENT_ID` in `backend/.env` (or on the host; see Deployment) and restart the backend. Changes to the origins can take from a few minutes to a few hours to apply. Until they do, Google's button reports that the origin is not allowed.
+
+The frontend needs no setting of its own: it reads the client ID from the backend when the page loads.
 
 ### Tests
 
@@ -115,12 +131,12 @@ Northflank's free Sandbox runs the image with a persistent volume and keeps it r
    - **Build type:** Dockerfile, with Dockerfile path `/Dockerfile` and build context `/`.
    - **Compute plan:** the largest the Sandbox offers, at least 0.2 vCPU and 512 MB (Node and Python run side by side).
    - **Ports:** Northflank reads port 10000 from the Dockerfile. Check that it is set to HTTP and **Public**.
-4. Before the first deploy finishes, open the service's **Environment** page and add the runtime variables `ANTHROPIC_API_KEY` and, optionally, `APP_PASSWORD`.
+4. Before the first deploy finishes, open the service's **Environment** page and add the runtime variables `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_ID` and `SESSION_SECRET` (see [Sign in with Google](#sign-in-with-google-optional)). Without `GOOGLE_CLIENT_ID`, anyone who finds the URL can use the app.
 5. On the **Volumes** page, add a volume (Single Read/Write, the smallest size) with container mount path `/data`. Without it, sessions are lost on every restart and deploy. A volume can only grow later, never shrink.
 6. On the **Health checks** page, add a readiness check: HTTP, path `/api/health`, port 10000.
-7. Open the public URL (it ends in `.code.run`) from the service's header once the deploy is running.
+7. Open the public URL (it ends in `.code.run`) from the service's header once the deploy is running. Add that URL to the Google client's **Authorized JavaScript origins**, or the sign-in button will not work.
 
-New commits on `main` rebuild and redeploy automatically while CI is turned on for the service. Change `APP_PASSWORD` on the **Environment** page; the service restarts with the new value.
+New commits on `main` rebuild and redeploy automatically while CI is turned on for the service. Change `GOOGLE_CLIENT_ID` or `SESSION_SECRET` on the **Environment** page; the service restarts with the new value. Changing `SESSION_SECRET` signs everyone out. `APP_PASSWORD` from earlier versions is no longer used, so you can delete it.
 
 ### Separate frontend and backend
 
@@ -133,7 +149,10 @@ The two halves can also be deployed on their own hosts:
 | --- | --- | --- |
 | Backend | `ANTHROPIC_API_KEY` | Your Claude API key |
 | Backend | `ALLOWED_ORIGINS` | The frontend's URL, for example `https://interview-ready.example.com` |
-| Backend | `APP_PASSWORD` | A long shared password, or empty for open access |
+| Backend | `GOOGLE_CLIENT_ID` | The Google OAuth client ID, or empty for open access |
+| Backend | `SESSION_SECRET` | A random string of at least 32 characters that signs the session cookie |
 | Frontend | `NEXT_PUBLIC_API_BASE_URL` | The backend's URL plus `/api`. It is built into the page, so rebuild the frontend after changing it |
 
 Set these in the host's environment settings rather than committing a `.env` file.
+
+With Google sign-in, the browser sends the session cookie to the backend only when both halves are on the same site, for example `app.example.com` and `api.example.com`. On unrelated domains the cookie is not sent and every call is refused, so use the one-container image there instead. Add the frontend's URL to the Google client's **Authorized JavaScript origins**.

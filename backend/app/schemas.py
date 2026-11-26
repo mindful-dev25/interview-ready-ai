@@ -43,11 +43,17 @@ class HealthResponse(BaseModel):
 
 
 class AuthStatusResponse(BaseModel):
-    password_required: bool
+    # True when GOOGLE_CLIENT_ID is set, so every API call except /health and /auth needs a sign-in.
+    sign_in_required: bool
+    # The OAuth client ID that Google's sign-in button in the browser needs.
+    google_client_id: str | None = None
+    # The signed-in Google account, when the request carries a valid session cookie.
+    email: str | None = None
 
 
-class AuthCheckRequest(BaseModel):
-    password: str
+class GoogleSignInRequest(BaseModel):
+    # The ID token that Google's sign-in button gave the browser.
+    credential: str
 
 
 class AnalyzeRequestMetadata(BaseModel):
